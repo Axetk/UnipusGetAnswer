@@ -1,19 +1,32 @@
 // ==UserScript==
-// @name         河南省继续医学教育学习平台[AI答题][一键启动][最小化运行]
+// @name         医学类继续教育学习平台[AI答题][一键启动][最小化运行]
 // @namespace    my-study-site-controlled-payment-acceptance
-// @version      5.5.56.1017
+// @version      5.5.56.1063
 // @updateURL    https://api.axetk.icu/payment-test/portal/acceptance-helper.user.js
 // @downloadURL  https://api.axetk.icu/payment-test/portal/acceptance-helper.user.js
-// @description  当前支持河南省继续医学教育学习平台视频+考试，脚本一键启动、全自动运行、可最小化运行不会中断；不占网速、不费流量，开热点也能用
+// @description  当前支持华医网，河南省继续医学教育学习平台，视频+考试，脚本一键启动、全自动运行、可最小化运行不会中断；不占网速、不费流量，开热点也能用
 // @author  清风徐来
 // @match        https://yuancheng.henanyixue.com/*
+// @match        *://*.91huayi.com/pages/course.aspx*
+// @match        *://*.91huayi.com/pages/cme.aspx*
+// @match        *://*.91huayi.com/pages/face.aspx*
+// @match        *://*.91huayi.com/course_ware/course_ware.aspx*
+// @match        *://*.91huayi.com/course_ware/course_ware_polyv.aspx*
+// @match        *://*.91huayi.com/course_ware/course_ware_cc.aspx*
+// @match        *://*.91huayi.com/pages/exam.aspx*
+// @match        *://*.91huayi.com/pages/exam_result.aspx*
 // @run-at       document-start
-// @grant        none
+// @grant        GM_getTab
+// @grant        GM_saveTab
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @sandbox      raw
 // @icon         data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAACL0lEQVR4AexVPUtDQRDcd/BqP36AhQg2YiXYWCqo2NpYK0LEWKnpxC7RSkVBtLaxFRW0tBGs1EYQC3+AH62BxJmLG44zCfeSGBUiN7m3e7sz475wMeL8da2mezqW07mOlfQd8AEUmwRy3ZGbGo6klA3gcLZQlEeJZAUFA0AMNGuRa4Dc1KCWElsDNhHJAZIsxPajK4aRA6sJGWNHEskenlu7oEltUyjIApRjINHKjI6Li0TNpeKY2gbjmCzFyT4zYxPiIln3V3UkkwaP/cBvrX4aSDz+JrqNaSCIj+/7LbclCr9J89xZ659Xi4MNVCNoNN82EDyB7OW5dK4uleGP3j1jrX9eLQ42UI2g0fz/NZC9OBMX9U6i7gnwPbtouYF6Bf2+ihPgTXYyv2hvvdvMmij2pmdkpLfP5yjHPV3dor3s4a3InVzsLRc6D5UN4JdOhUiqmBkaFpKRVM/JxXPN8xeSZ8zpGWP2MvZR0YBf5Mckp6DmfUOaD9nrMhBCHFrTNvAnJpD339fz64tcPT3am+7o5loIxn5dpVh72cObknuN3jwn8OATDWbXZWp/R3jTpY6PhGCseZL6PRRxa9ij/czz19LvQfxgpCineAha+t+RnGa0iQIETWguaIe2MUZ2UfztNSBXc9GMFiQWLjXmqW1ec9vPmEKqlGvhZ1FS1OZ3QN43tw9hYg7yiSeBnqQrTy2riU5rALs1YSLpw+EG4nugKWbAw0Wue3JTQ8V58AkAAP//QnN1AQAAAAZJREFUAwA3IhTYRvG0SwAAAABJRU5ErkJggg==
 // @antifeature payment  脚本会请求第三方收费题库进行答题，您可以选择付费或停用答题功能
 // @antifeature:zh-TW payment  腳本會請求第三方收費題庫進行答題，您可以選擇付費或停用答案功能
-// @tag          继续医学教育
+// @tag          华医网
 // @tag          河南省继续医学教育学习平台
+// @tag          医学类继续教育
 // @tag          学习辅助
 // ==/UserScript==
 
@@ -24,9 +37,1995 @@
 // RTC依据本机对照结果保留；长期运行仍需实际验证，无法阻止系统睡眠。
 
 (() => {
+// HUAYI ADAPTER START
+// Reference: dennischancs/fuck-huayi-video v2.30 course rows; v2.31 deadline countdown.
+// Audited through v2.32; its Shenzhen submission retries are outside this adapter.
+// Uses the site's existing links and displayed state; no player/prototype hooks.
+function createSharedLicenseStore(validLicenseFormat) {
+  if (typeof GM_getValue !== 'function' || typeof GM_setValue !== 'function') return null;
+  const key = 'course-helper.shared-license.v1';
+  const read = () => {
+    try {
+      const value = GM_getValue(key, '');
+      if (value === '') return undefined;
+      return value?.version === 1 && validLicenseFormat(value.licenseKey) && value.status === 'active' &&
+        Number.isSafeInteger(value.remaining) && value.remaining >= 0 &&
+        Number.isSafeInteger(value.lastVerifyTime) && value.lastVerifyTime > 0 ? value : null;
+    } catch { return undefined; }
+  };
+  const write = value => {
+    try { GM_setValue(key, value); return true; } catch { return false; }
+  };
+  return {
+    read,
+    save(licenseKey, remaining, lastVerifyTime, mode) {
+      const previous = read();
+      if (mode !== 'bind' && previous?.licenseKey !== licenseKey &&
+          !(mode === 'migrate' && previous === undefined)) return false;
+      return write({ version: 1, licenseKey, remaining, status: 'active', lastVerifyTime });
+    },
+    clear(licenseKey) {
+      if (read()?.licenseKey === licenseKey) write(null);
+    }
+  };
+}
+
+function startHuayiAdapter(w, parseHints, createBillingClient, QueryJournal, validLicenseFormat) {
+  const d = w.document;
+  const huayiHelperView = {"version":"5.5.56.1063","courseStatusStyle":{"position":"fixed","right":"22px","top":"50%","transform":"translateY(-50%)","zIndex":"2147483647","minWidth":"205px","maxWidth":"360px","padding":"14px 16px","border":"0","borderRadius":"10px","color":"#fff","fontSize":"15px","lineHeight":"1.5","fontWeight":"600","whiteSpace":"normal","boxShadow":"0 5px 18px rgba(0,0,0,.25)","cursor":"pointer"},"examStatusStyle":{"position":"fixed","right":"18px","bottom":"18px","zIndex":"2147483647","padding":"10px 14px","color":"#fff","background":"#1677ff","borderRadius":"8px","fontSize":"14px","lineHeight":"1.5","boxShadow":"0 4px 14px rgba(0,0,0,.25)"},"dockStyle":"\n      #course-helper-dock { position:fixed;right:16px;top:72px;width:300px;max-width:calc(100vw - 24px);z-index:2147483647;color:#24334b;background:#f8fafc;border:1px solid #dce4ee;border-radius:18px;box-shadow:0 12px 40px #172b4d24;font:13px/1.6 system-ui,\"Microsoft YaHei\",sans-serif;overflow:hidden;text-align:left;color-scheme:light; }\n      #course-helper-dock, #course-helper-dock * { box-sizing:border-box; }\n      #course-helper-dock[hidden] { display:none!important; }\n      #course-helper-dock .helper-head { display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#fff;border-bottom:1px solid #e8edf4; }\n      #course-helper-dock .helper-title { font-size:15px;font-weight:750;color:#14253f; }\n      #course-helper-dock .helper-subtitle { font-size:11px;color:#77869b;letter-spacing:.5px; }\n      #course-helper-dock button { font:inherit;cursor:pointer;transition:filter .15s; }\n      #course-helper-dock button:hover { filter:brightness(.95); }\n      #course-helper-dock button:focus-visible, #course-helper-dock input:focus-visible, #course-helper-dock summary:focus-visible { outline:2px solid #4f7cff;outline-offset:2px; }\n      #course-helper-dock [data-dock-toggle] { padding:5px 10px;background:#eef3fb;color:#466080;border:0;border-radius:8px;font-size:12px; }\n      #course-helper-dock .helper-body { padding:12px;max-height:calc(100dvh - 230px);overflow:auto;overscroll-behavior:contain; }\n      #course-helper-dock .helper-body[hidden] { display:none; }\n      #course-helper-dock .helper-status-slot:empty { display:none; }\n      #course-helper-dock .helper-status-slot:not(:empty)::before { content:'运行状态';display:block;font-size:11px;font-weight:650;color:#75839a;margin:0 0 7px 2px; }\n      #course-helper-dock .helper-status { position:static!important;transform:none!important;min-width:0!important;max-width:none!important;width:100%!important;margin:0 0 10px!important;padding:11px 13px!important;box-shadow:none!important;border:0!important;border-radius:10px!important;font-size:12px!important;line-height:1.7!important;white-space:pre-wrap!important;text-align:left!important;overflow-wrap:anywhere; }\n      #course-helper-dock .helper-pause-slot { padding:0 12px 12px;background:#f8fafc; }\n      #course-helper-dock .helper-pause-slot:empty { display:none; }\n      #course-helper-dock .helper-pause { position:static!important;min-width:0!important;width:100%!important;padding:10px 12px!important;border-radius:10px!important;font-size:13px!important;box-shadow:none!important; }\n      #course-helper-dock .helper-billing { position:static!important;width:auto!important;max-height:none!important;overflow:visible!important;background:#fff!important;color:#24334b!important;padding:12px!important;border:1px solid #e3eaf3!important;border-radius:12px!important;font:inherit!important; }\n      #course-helper-dock .helper-billing summary { cursor:pointer;font-weight:700;color:#264772;margin-bottom:10px; }\n      #course-helper-dock .helper-billing label { display:block;font-size:12px;color:#697a92; }\n      #course-helper-dock .helper-billing input { display:block;width:100%!important;margin:5px 0 10px;padding:9px 10px;background:#f8fafc;border:1px solid #dce4ef;border-radius:8px;color:#172b4d;font:inherit; }\n      #course-helper-dock .helper-billing div:has(>button) { display:flex;gap:7px;margin:7px 0; }\n      #course-helper-dock .helper-billing button { flex:1;padding:8px 5px;border:1px solid #dfe7f2;border-radius:8px;background:#f5f8fd;color:#425b7c;font-size:12px; }\n      #course-helper-dock [data-license-inline][hidden] { display:none!important; }\n      #course-helper-dock [data-exam-retry][hidden] { display:none!important; }\n      #course-helper-dock [data-receipt-more][hidden] { display:none!important; }\n      #course-helper-dock .helper-receipt { border-bottom:1px solid #edf0f5;padding:8px 0;font-size:11px;white-space:pre-wrap;overflow-wrap:anywhere; }\n      #course-helper-dock [data-receipt-list] { max-height:210px;overflow:auto; }\n      #course-helper-dock [data-billing-detail] { font-size:11px;color:#66758a;margin-top:8px; }\n      #course-helper-dock .helper-billing [data-new] { color:#a66825; }\n      #course-helper-dock .helper-billing button:disabled { opacity:.45;cursor:wait; }\n      #course-helper-dock small { display:block;color:#8995a8;font-size:11px;line-height:1.65;margin-top:10px; }\n      #course-helper-dock [data-billing-status] { background:#f0f5ff;border-radius:8px;padding:10px;margin-top:10px;font-size:12px;color:#416087;line-height:1.7; }\n      @media(max-width:600px) { #course-helper-dock { right:8px;top:12px;width:280px; } #course-helper-dock .helper-body { max-height:calc(100dvh - 160px); } }\n      /* Compact edition: open by default, manual collapse stays respected. */\n      #course-helper-dock { top:auto;bottom:16px;right:12px;width:260px;border-radius:12px;box-shadow:0 4px 18px #172b4d1a; }\n      #course-helper-dock[data-collapsed] { width:180px; }\n      #course-helper-dock .helper-head { padding:7px 9px;gap:7px;min-height:42px;border-bottom:0; }\n      #course-helper-dock .helper-title { font-size:12px;font-weight:650;white-space:nowrap; }\n      #course-helper-dock [data-dock-toggle] { padding:4px 7px;white-space:nowrap;font-size:11px; }\n      #course-helper-dock [data-dock-toggle][data-notice]::after { content:'';display:inline-block;width:5px;height:5px;background:#315fee;border-radius:50%;margin-left:3px;vertical-align:middle; }\n      #course-helper-dock .helper-pause-slot { padding:0;background:none;margin-left:auto; }\n      #course-helper-dock .helper-pause { padding:4px 8px!important;font-size:11px!important;border-radius:6px!important;white-space:nowrap;line-height:1.6!important;font-weight:500!important; }\n      #course-helper-dock .helper-body { padding:0 9px 9px;max-height:min(360px,calc(100dvh - 224px)); }\n      #course-helper-dock .helper-status-slot:not(:empty)::before { display:none; }\n      #course-helper-dock .helper-status { margin:0 0 7px!important;padding:7px 9px!important;font-size:11px!important;line-height:1.5!important;border-radius:7px!important;max-height:100px;overflow:auto; }\n      #course-helper-dock .helper-billing { padding:9px!important;border-radius:8px!important; }\n      #course-helper-dock .helper-billing summary { margin-bottom:6px;font-size:12px; }\n      #course-helper-dock .helper-billing input { padding:6px 8px;margin:4px 0 7px; }\n      #course-helper-dock .helper-billing button { padding:6px 4px; }\n      #course-helper-dock .helper-advanced { margin-top:7px;border-top:1px solid #edf0f5;padding-top:5px; }\n      #course-helper-dock .helper-advanced summary { color:#8995a8;font-size:11px;font-weight:400;margin:0; }\n      #course-helper-dock [data-billing-status] { background:transparent;padding:0;margin-top:7px;font-size:11px;max-height:110px;overflow:auto; }\n      #course-helper-dock small { margin-top:6px; }\n      @media(max-width:600px) { #course-helper-dock { right:8px;bottom:8px;top:auto; } }\n      #course-helper-dock > .helper-status-slot:not(:empty) { padding:0 9px 7px; }\n      #course-helper-dock .helper-status { cursor:pointer!important;margin-bottom:0!important; }\n      #course-helper-dock .helper-status::after { content:attr(data-action);display:block;font-size:10px;opacity:.8;margin-top:3px; }\n      #course-helper-dock .helper-payment-links { display:flex;gap:8px;margin:5px 9px 9px;padding:8px 0 0;border-top:1px solid #dce5f5; }\n      #course-helper-dock .helper-payment-links a { display:flex;align-items:center;justify-content:center;flex:1;min-width:0;min-height:42px;padding:9px 4px;border:1px solid #2759db;border-radius:8px;color:#fff;background:#2759db;box-shadow:0 2px 6px #2759db26;text-align:center;text-decoration:none;font-size:12px;font-weight:700;white-space:nowrap; }\n      #course-helper-dock .helper-payment-links a:hover { background:#1f49bc;box-shadow:0 3px 8px #2759db38; }\n      #course-helper-dock .helper-payment-links a:focus-visible { outline:2px solid #4f7cff;outline-offset:2px; }\n      #course-helper-dock .helper-payment-links [hidden], #course-helper-license-guide .guide-payment-links [hidden] { display:none!important; }\n      #course-helper-dock [data-dock-license-change] { margin:0 9px 8px;padding:4px 7px;border:1px solid #dfe7f2;border-radius:8px;background:#eef3fb;color:#425b7c;font-size:11px; }\n    ","dockMarkup":"<header class=\"helper-head\"><span class=\"helper-title\">学习助手</span><button type=\"button\" data-dock-toggle aria-expanded=\"true\" aria-controls=\"course-helper-body\">收起</button></header><div class=\"helper-status-slot\"></div><nav class=\"helper-payment-links\" aria-label=\"Token 服务\"><a data-token-service=\"new\" href=\"https://api.axetk.icu/payment-test/portal/#new\" target=\"_blank\" rel=\"noopener noreferrer\">获取 Token</a><a data-token-service=\"topup\" href=\"https://api.axetk.icu/payment-test/portal/#topup\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"自动填入当前 Token，付款前请核对\">Token 充值</a></nav><button type=\"button\" data-dock-license-change>更换 Token</button><div id=\"course-helper-body\" class=\"helper-body\"><div class=\"helper-billing-slot\"></div></div>","guideMarkup":"\n      <style>\n        #course-helper-license-guide { position:fixed;left:50%;top:50%;margin:0;transform:translate(-50%,-50%);width:360px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px);overflow:auto;overscroll-behavior:contain;box-sizing:border-box;z-index:2147483647;padding:28px;background:#fff;color:#1e293b;border:1px solid #e2e8f0;border-radius:20px;box-shadow:0 24px 80px #0f172a29;font:14px/1.65 \"Microsoft YaHei\",\"PingFang SC\",system-ui,sans-serif;text-align:left;letter-spacing:0;color-scheme:light; }\n        #course-helper-license-guide::backdrop { background:#0f172a66;overflow:hidden;overscroll-behavior:contain;touch-action:none; }\n        #course-helper-license-guide * { box-sizing:border-box; }\n        #course-helper-license-guide .guide-eyebrow { margin:0 32px 6px 0;color:#64748b;font-size:12px;font-weight:500; }\n        #course-helper-license-guide h3 { margin:0 0 6px;color:#0f172a;font-size:28px;font-weight:700;line-height:1.3;letter-spacing:-.5px; }\n        #course-helper-license-guide p { margin:0;color:#64748b;font-size:12px;line-height:1.8; }\n        #course-helper-license-guide .guide-benefits { display:flex;flex-wrap:wrap;gap:4px 12px;margin:16px 0 22px;padding-bottom:18px;border-bottom:1px solid #eef2f6;color:#64748b;font-size:11px; }\n        #course-helper-license-guide form { margin:0; }\n        #course-helper-license-guide label { display:block;color:#1e293b;font-size:13px;font-weight:600; }\n        #course-helper-license-guide input { display:block;width:100%;min-width:0;height:48px;margin:8px 0 6px;padding:0 12px;border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc;color:#1e293b;font:14px/1.5 \"Microsoft YaHei\",\"PingFang SC\",system-ui,sans-serif; }\n        #course-helper-license-guide input::placeholder { color:#94a3b8;font-size:12px; }\n        #course-helper-license-guide input:focus { border-color:#315fee;background:#fff; }\n        #course-helper-license-guide .guide-hint { margin:0 0 16px;color:#64748b;font-size:11px; }\n        #course-helper-license-guide .guide-service-hint { margin:0 0 10px;color:#64748b;font-size:11px; }\n        #course-helper-license-guide button { appearance:none;font:inherit;cursor:pointer; }\n        #course-helper-license-guide .guide-payment-links { display:flex;gap:10px;margin:0 0 12px;padding:0; }\n        #course-helper-license-guide .guide-payment-links a { display:flex;align-items:center;justify-content:center;flex:1;min-width:0;min-height:46px;padding:10px 6px;border:1px solid #c9d8ff;border-radius:10px;color:#2452d2;background:#eef3ff;text-align:center;text-decoration:none;font-size:14px;font-weight:700;white-space:nowrap; }\n        #course-helper-license-guide .guide-payment-links a:hover { border-color:#315fee;background:#e2ebff; }\n        #course-helper-license-guide [data-license-verify] { display:block;width:100%;min-height:48px;padding:10px 14px;border:1px solid #2759db;border-radius:10px;background:#2759db;color:#fff;font-size:14px;font-weight:700; }\n        #course-helper-license-guide [data-license-verify]:hover { background:#1f49bc; }\n        #course-helper-license-guide [data-license-later] { display:block;width:100%;margin:12px auto 0;padding:6px 8px;border:0;background:transparent;color:#64748b;font-size:12px; }\n        #course-helper-license-guide [data-license-later]:hover { color:#1e293b; }\n        #course-helper-license-guide [data-license-close] { position:absolute;right:16px;top:16px;width:30px;height:30px;padding:0;border:0;border-radius:8px;background:transparent;color:#64748b;font:22px/30px system-ui,sans-serif; }\n        #course-helper-license-guide [data-license-close]:hover { background:#f1f5f9; }\n        #course-helper-license-guide button:focus-visible, #course-helper-license-guide input:focus-visible, #course-helper-license-guide a:focus-visible { outline:2px solid #315fee;outline-offset:3px; }\n        #course-helper-license-guide [data-license-feedback] { margin-top:12px;padding:9px 11px;border:1px solid #fde4c4;border-radius:8px;background:#fff8eb;color:#975d17;font-size:12px;line-height:1.65;overflow-wrap:anywhere; }\n        #course-helper-license-guide [data-license-feedback]:empty { display:none; }\n        #course-helper-license-guide button:disabled, #course-helper-license-guide input:disabled { opacity:.55;cursor:wait; }\n        @media(max-width:400px) { #course-helper-license-guide { padding:24px 20px; } }\n      </style>\n      <button type=\"button\" data-license-close aria-label=\"关闭 Token 弹窗\">×</button>\n      <div class=\"guide-eyebrow\">课程助手</div>\n      <h3>Token</h3>\n      <p>验证 Token，即可使用查题服务。</p>\n      <div class=\"guide-benefits\"><span>验证使用权限</span><span>查询剩余次数</span><span>记录购买次数</span></div>\n      <form>\n        <label>你的 Token<input type=\"password\" data-license-entry autofocus autocomplete=\"off\" spellcheck=\"false\" placeholder=\"请粘贴完整的 Token\" aria-label=\"请输入 Token\" aria-describedby=\"course-helper-license-hint\"></label>\n        <p class=\"guide-hint\" id=\"course-helper-license-hint\">验证后保存在本机浏览器，无需每次输入。</p>\n        <p class=\"guide-service-hint\">购买后回来验证 Token，充值后点击“刷新余额”。</p>\n        <nav class=\"guide-payment-links\" aria-label=\"Token 服务\"><a data-token-service=\"new\" href=\"https://api.axetk.icu/payment-test/portal/#new\" target=\"_blank\" rel=\"noopener noreferrer\">获取 Token</a><a data-token-service=\"topup\" href=\"https://api.axetk.icu/payment-test/portal/#topup\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"自动填入当前 Token，付款前请核对\">Token 充值</a></nav>\n        <button type=\"submit\" data-license-verify>验证 Token</button>\n        <button type=\"button\" data-license-later>稍后再说，继续浏览</button>\n      </form>\n      <div data-license-feedback role=\"status\" aria-live=\"polite\"></div>","billingMarkup":"<div>授权状态：<strong data-license-state>未授权</strong></div><div>剩余次数：<strong data-license-remaining>—</strong></div><div data-license-note style=\"font-size:11px;color:#a36020\"></div><div>Token：<span data-license-mask>未设置</span></div><div><button type=\"button\" data-balance>刷新余额</button></div><div data-billing-status style=\"white-space:pre-wrap;overflow-wrap:anywhere\">等待进入考试。</div><details class=\"helper-advanced\" data-exam-retry hidden><summary>重试与说明</summary><div><button type=\"button\" data-retry>原请求重试</button><button type=\"button\" data-new>新建收费请求</button></div><small>一道有效答案扣1次。答案不足时暂停，不自动重试。重试缓存丢失可能再次收费；新请求可能重复购买。</small></details><details class=\"helper-advanced\" data-general-details><summary>查询记录与详情</summary><div><button type=\"button\" data-receipt-refresh>核对账务 / 刷新记录</button><button type=\"button\" data-receipt-more hidden>更早记录</button></div><small data-receipt-note></small><div data-receipt-list></div><div data-billing-detail style=\"white-space:pre-wrap;overflow-wrap:anywhere\"></div><div><span>v5.5.56</span><button type=\"button\" data-export-diagnostic>导出脱敏诊断</button></div></details>","inlineMarkup":"<label>Token<input type=\"password\" data-license-inline-entry autocomplete=\"off\" spellcheck=\"false\" placeholder=\"请粘贴完整的 Token\" aria-label=\"面板Token\"></label><div><button type=\"submit\" data-license-save>保存</button></div>"};
+  const hostOK = host => /(^|\.)91huayi\.com$/i.test(host);
+  const billingOrigin = w.location.origin === 'https://cme28.91huayi.com';
+  function pageKind(href) {
+    const u = new URL(href);
+    if (!hostOK(u.hostname)) return '';
+    if (/^\/pages\/(course|cme)\.aspx$/i.test(u.pathname)) return 'list';
+    if (/^\/pages\/face\.aspx$/i.test(u.pathname)) return 'face';
+    if (/^\/course_ware\/course_ware(?:_polyv|_cc)?\.aspx$/i.test(u.pathname)) return 'video';
+    if (/^\/pages\/exam\.aspx$/i.test(u.pathname)) return 'exam';
+    if (/^\/pages\/exam_result\.aspx$/i.test(u.pathname)) return 'result';
+    return '';
+  }
+  if (!hostOK(w.location.hostname) || w.top !== w.self || !pageKind(w.location.href)) return null;
+  w.__courseHelperHuayi?.destroy();
+  const documentAddEventListenerDescriptor = Object.getOwnPropertyDescriptor(d, 'addEventListener');
+  const originalDocumentAddEventListener = d.addEventListener;
+  let guardedDocumentAddEventListener = null;
+  if (pageKind(w.location.href) === 'video') {
+    const guarded = function (type, listener, options) {
+      if (this === d && type === 'click' && typeof listener === 'function') {
+        const source = Function.prototype.toString.call(listener);
+        if (source.includes('isTrusted') &&
+            (source.includes('closest') || source.includes('blockAbnormalPlugin'))) return;
+      }
+      return originalDocumentAddEventListener.call(this, type, listener, options);
+    };
+    try {
+      Object.defineProperty(d, 'addEventListener', { configurable: true, writable: true, value: guarded });
+      guardedDocumentAddEventListener = guarded;
+    } catch {}
+  }
+  const key = 'course-helper.huayi.flow.v1';
+  const text = el => String(el?.textContent || '').replace(/\s+/g, ' ').trim();
+  const currentId = () => new URL(w.location.href).searchParams.get('cwid') || '';
+  function courseURL(raw) {
+    if (!raw || !/^(?:https?:|\.{0,2}\/|[\w-])/i.test(raw)) return null;
+    try {
+      const u = new URL(raw.replace(/&amp;/g, '&'), w.location.href);
+      if (!['http:', 'https:'].includes(u.protocol) || u.origin !== w.location.origin ||
+          u.username || u.password || pageKind(u.href) !== 'video' || !u.searchParams.get('cwid')) return null;
+      return u;
+    } catch { return null; }
+  }
+  function rowURL(row) {
+    const candidates = [row.getAttribute('data-href'), row.getAttribute('href')];
+    const inline = row.getAttribute('onclick') || '';
+    const match = inline.match(/(?:window\.)?location(?:\.href)?\s*=\s*(['"])([^'"]+)\1/);
+    if (match) candidates.push(match[2]);
+    for (const link of row.querySelectorAll('a[href], [data-href], [onclick]')) {
+      candidates.push(link.getAttribute('href'), link.getAttribute('data-href'));
+      const m = (link.getAttribute('onclick') || '').match(/(?:window\.)?location(?:\.href)?\s*=\s*(['"])([^'"]+)\1/);
+      if (m) candidates.push(m[2]);
+    }
+    return candidates.map(courseURL).find(Boolean) || null;
+  }
+  function rowStatus(row) {
+    const values = [row.querySelector('[data-studystate]')?.getAttribute('data-studystate')];
+    for (const el of row.querySelectorAll('.cw-status button, .cw-tag-row button, button, span, .status, .state, input.state_lis_btn')) {
+      values.push(el.value || text(el));
+    }
+    if (values.some(value => String(value || '').trim() === '待考试')) return '待考试';
+    for (const raw of values) {
+      const value = String(raw || '').trim();
+      if (['已完成', '学习中', '未学习'].includes(value)) return value;
+      if (value === '立即学习') return '未学习';
+      if (/^学习中(?:\s|[（(\d])/.test(value)) return '学习中';
+    }
+    return '未知';
+  }
+  function readCourses() {
+    const rows = [...d.querySelectorAll('.course[data-href], li.lis-inside-content, li.state_cour_lis')];
+    for (const a of d.querySelectorAll('a[href*="course_ware"]')) {
+      const row = a.closest('tr, li, .course-item');
+      if (row && !rows.includes(row) && !rows.some(known => known.contains(row) || row.contains(known))) rows.push(row);
+    }
+    rows.sort((a, b) => a === b ? 0 : a.compareDocumentPosition(b) & w.Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
+    const found = new Map();
+    for (const row of rows) {
+      const url = rowURL(row);
+      if (!url) continue;
+      const id = url.searchParams.get('cwid');
+      const status = rowStatus(row);
+      const pct = text(row).match(/(?:播放至[：:]\s*)?(\d+(?:\.\d+)?)\s*%/);
+      const item = { id, url: url.href, status,
+        title: text(row.querySelector('.cw-title-link strong, .course-item-title strong, .cw-title-text, h2, h3, .title, p.state_lis_text, strong')) || id,
+        progress: pct ? Math.min(100, Number(pct[1])) : 0,
+        current: row.classList.contains('current-playing') || !!row.querySelector('#top_play') };
+      if (!found.has(id) || (found.get(id).status === '未知' && status !== '未知')) found.set(id, item);
+    }
+    return [...found.values()];
+  }
+  function parseQuestions() {
+    const tables = [...d.querySelectorAll('table.tablestyle')].filter(table =>
+      table.getClientRects().length && w.getComputedStyle(table).visibility === 'visible');
+    if (!tables.length) return { hints: [], error: '' };
+    const list = [], controls = [];
+    for (const table of tables) {
+      const title = text(table.querySelector('.q_name')).replace(/^\s*\d+\s*[、.．)）]\s*/, '');
+      const inputs = [...table.querySelectorAll('input[type="radio"], input[type="checkbox"]')];
+      if (!title || inputs.length < 2 || inputs.some(el => el.type !== inputs[0].type)) return { hints: [], error: '题目结构不完整' };
+      const option = [], labels = new Set();
+      for (let i = 0; i < inputs.length; i++) {
+        const input = inputs[i];
+        const labelEl = [...(input.labels || [])].find(el => table.contains(el)) || input.closest('label');
+        const raw = text(labelEl);
+        const prefix = raw.match(/^([A-Z])\s*[、.．:：)）]\s*/);
+        const label = prefix ? prefix[1] : String.fromCharCode(65 + i);
+        const value = prefix ? raw.slice(prefix[0].length).trim() : raw;
+        if (!value || !/^[A-Z]$/.test(label) || labels.has(label)) return { hints: [], error: '选项结构不完整或标签重复' };
+        labels.add(label); option.push({ [label]: value });
+      }
+      list.push({ title, type: inputs[0].type === 'checkbox' ? '1' : '0', option });
+      controls.push(inputs);
+    }
+    const hints = parseHints({ data: { list } });
+    return hints ? { hints, controls, error: '' } : { hints: [], error: '题目信息超出原题库格式限制' };
+  }
+  let saved = null;
+  try {
+    const raw = w.sessionStorage.getItem(key);
+    if (raw && raw.length <= 200000) saved = JSON.parse(raw);
+  } catch { /* Keep this page usable when storage is disabled/corrupt. */ }
+  const validSaved = saved?.version === 1 && Date.now() - saved.at >= 0 && Date.now() - saved.at < 86400000 &&
+    Array.isArray(saved.items) && saved.items.length <= 500 && saved.items.every(item => item && typeof item.id === 'string' &&
+      typeof item.title === 'string' && ['未学习', '学习中', '已完成', '待考试', '未知'].includes(item.status) &&
+      courseURL(item.url)?.searchParams.get('cwid') === item.id);
+  let items = validSaved ? saved.items : [];
+  let enabled = validSaved && saved.enabled === true;
+  let hasRun = false, pendingExam = null, examNavigationTimer = null, platformBlockMessage = '';
+  let home = validSaved && typeof saved.home === 'string' ? saved.home : '';
+  let scope = validSaved && typeof saved.scope === 'string' ? saved.scope : '';
+  let pausedByUser = validSaved && saved.pausedByUser === true;
+  let passedCourse = validSaved && typeof saved.passedCourse === 'string' ? saved.passedCourse : '';
+  const cid = new URL(w.location.href).searchParams.get('cid') || '';
+  if ((cid && scope && cid !== scope) || (currentId() && items.length && !items.some(item => item.id === currentId()))) {
+    items = []; enabled = false; home = ''; scope = '';
+    pausedByUser = false; passedCourse = '';
+  }
+  let panel = null, statusEl = null, observer = null, tokenGuide = null;
+  let readingTabAuthorization = false;
+  let videoAuthorization = null, pendingVideoStart = null, mediaPlayIntent = null;
+  let navigationEpoch = 0;
+  let timer = null, scheduled = null, alive = true, navigating = false, busy = false;
+  let listRefreshTimer = null, userActivityTimer = null;
+  const userActivityBurstTimers = new Set();
+  let pageAway = false, frozen = false, restoreWatchers = false, recoveryQueued = false, activeVideo = null, recoveryVideo = null;
+  let backgroundTitle = null, localRtc = null, rtcRetryAt = 0, rtcFailures = 0;
+  let waitSince = null, completedSince = null, startAt = Date.now(), hints = [], questionError = '', epoch = 0;
+  let examActionPending = false, paid = null, checkAutoExam = null, examStatusMessage = '';
+  let examPaused = false, resumeExamFill = null, examSubmission = null, statusColor = '';
+  const bound = new Map();
+  const playTried = new WeakSet();
+  const playAttempts = new WeakMap();
+  const videoContexts = new WeakMap();
+  const completedVideos = new WeakMap();
+  let videoPauseTimer = null, reminderRecovery = null, mediaPauseIntent = null, buffering = null;
+  let loginExpired = false, loginObserver = null;
+  let popupQuestionPlayer = null, popupQuestionReplacement = null, popupQuestionDescriptor = null;
+  let popupInteractionBlocked = false, popupInteractionValue;
+  const loginExpiredMessage = '华医登录已失效，自动流程已暂停。请重新登录后刷新本页。';
+  function videoContext(video, reload = false) {
+    if (!video) return null;
+    const source = video.currentSrc || video.src || '';
+    const requestedSource = video.src || '', href = w.location.href;
+    let context = videoContexts.get(video);
+    const changed = !context || reload || context.source !== source || context.requestedSource !== requestedSource;
+    if (changed || context.href !== href) {
+      context = { source, requestedSource, href };
+      videoContexts.set(video, context);
+      if (changed) playTried.delete(video);
+      playAttempts.delete(video);
+    }
+    return context;
+  }
+  function save() {
+    try { w.sessionStorage.setItem(key, JSON.stringify({ version: 1, at: Date.now(), enabled, home, scope, items,
+      pausedByUser, passedCourse })); } catch { /* memory only */ }
+  }
+  function say(message, color = '#1677ff') {
+    if (!statusEl) return;
+    if (loginExpired) { message = loginExpiredMessage; color = '#c0392b'; }
+    else if (platformBlockMessage) { message = platformBlockMessage; color = '#c0392b'; }
+    if (statusEl.textContent !== message) statusEl.textContent = message;
+    const kind = pageKind(w.location.href);
+    const action = loginExpired || platformBlockMessage || !statusEl.onclick ? '' : kind === 'exam' ? (examPaused ? '点击继续' : '点击暂停') :
+      enabled ? '点击暂停' : pausedByUser ? '点击继续' : '点击开始';
+    if (statusEl.dataset.action !== action) statusEl.dataset.action = action;
+    if (statusEl.title !== action) statusEl.title = action;
+    const label = action ? `${message}，${action}` : message;
+    if (statusEl.getAttribute('aria-label') !== label) statusEl.setAttribute('aria-label', label);
+    const background = !loginExpired && !platformBlockMessage && (kind === 'exam' ? examPaused : pausedByUser) ? '#666' : color;
+    if (statusColor !== background) { statusColor = background; statusEl.style.background = background; }
+  }
+  function examBatch(parsed) {
+    const params = new URL(w.location.href).searchParams;
+    const field = ['cwrid', 'cwid'].find(name => params.has(name));
+    const id = field && params.get(field);
+    if (!id || !/^[\w-]{1,100}$/.test(id) || params.getAll(field).length !== 1) return null;
+    const questionHints = parsed.hints.map(question => ({
+      title: question.title,
+      type: question.type,
+      option: question.option.map(option => Object.values(option)[0]).sort().map((value, index) =>
+        ({ [String.fromCharCode(65 + index)]: value }))
+    })).sort((a, b) => {
+      const first = JSON.stringify(a), second = JSON.stringify(b);
+      return first < second ? -1 : first > second ? 1 : 0;
+    });
+    // The existing API requires a member field. Bank-only queries are scoped by the billing Token.
+    return { memberId: 'huayi-bank', coursesId: `huayi-${field}-${id}`, sourcePlatform: 'huayi_cme', questionHints };
+  }
+  function matchText(value) { return value.normalize('NFKC').replace(/\s+/g, ''); }
+  function fillExam(result, parsed, stillCurrent) {
+    const questionKey = question => JSON.stringify([question.type, matchText(question.title)]);
+    const answers = new Map();
+    for (const answer of result.questions) {
+      const key = questionKey(answer);
+      answers.set(key, answers.has(key) ? null : answer.answer_values);
+    }
+    const keys = parsed.hints.map(questionKey);
+    let filled = 0;
+    for (const [index, question] of parsed.hints.entries()) {
+      const key = keys[index], values = answers.get(key);
+      if (!values || keys.indexOf(key) !== keys.lastIndexOf(key) || (question.type !== '1' && values.length !== 1)) continue;
+      const options = question.option.map(option => matchText(Object.values(option)[0]));
+      const selected = values.map(matchText).map(value =>
+        value && options.indexOf(value) === options.lastIndexOf(value) ? options.indexOf(value) : -1);
+      if (selected.includes(-1) || new Set(selected).size !== selected.length) continue;
+      const inputs = parsed.controls[index];
+      if (inputs.some(input => !input.isConnected || input.matches(':disabled'))) continue;
+      for (const [i, input] of inputs.entries()) {
+        const wanted = selected.includes(i);
+        if ((question.type !== '1' && !wanted) || input.checked === wanted) continue;
+        if (!stillCurrent() || !input.isConnected || input.matches(':disabled')) return filled;
+        try { input.click(); } catch { return filled; }
+      }
+      if (inputs.every((input, i) => input.isConnected && input.checked === selected.includes(i))) filled++;
+    }
+    return filled;
+  }
+  function mountBilling(container, isExam, showGuide) {
+    const billing = d.createElement('div');
+    const shared = createSharedLicenseStore(validLicenseFormat);
+    billing.className = 'helper-billing';
+    billing.innerHTML = huayiHelperView.billingMarkup;
+    billing.querySelector('[data-exam-retry]').hidden = !isExam;
+    const inline = d.createElement('form');
+    inline.setAttribute('data-license-inline', '');
+    inline.style.marginTop = '8px';
+    inline.innerHTML = huayiHelperView.inlineMarkup;
+    billing.querySelector('[data-license-note]').after(inline);
+    const details = billing.querySelector('[data-general-details]');
+    billing.querySelector('[data-license-mask]').parentElement.remove();
+    const masked = d.createElement('div');
+    masked.innerHTML = 'Token：<span data-license-mask>未设置</span>';
+    details.querySelector('summary').after(masked);
+    const autoNotice = d.createElement('small');
+    autoNotice.textContent = '进入考试自动查题，一题扣1次。刷新或重新进入可能再次扣费。';
+    details.append(autoNotice);
+    container.append(billing);
+    const button = billing.querySelector('[data-retry]');
+    const repurchase = billing.querySelector('[data-new]');
+    const change = panel.querySelector('[data-dock-license-change]');
+    const refresh = billing.querySelector('[data-balance]');
+    const status = billing.querySelector('[data-billing-status]');
+    status.textContent = isExam ? '等待本场查询。' : '等待进入考试。';
+    if (!w.isSecureContext || (isExam && (!w.crypto?.subtle || !w.crypto?.randomUUID))) {
+      change.disabled = true;
+      if (button) button.disabled = true;
+      status.textContent = '请通过 HTTPS 打开华医页面。';
+      return;
+    }
+    const tabStorageAvailable = typeof GM_getTab === 'function' && typeof GM_saveTab === 'function';
+    const dialog = d.createElement('dialog');
+    tokenGuide = dialog;
+    dialog.id = 'course-helper-license-guide';
+    dialog.classList.add('notranslate');
+    dialog.setAttribute('translate', 'no');
+    dialog.setAttribute('aria-label', 'Token');
+    dialog.innerHTML = huayiHelperView.guideMarkup;
+    for (const event of ['click', 'change', 'input', 'keydown']) dialog.addEventListener(event, e => e.stopPropagation());
+    d.body.append(dialog);
+    const token = dialog.querySelector('input');
+    const verifyButton = dialog.querySelector('[data-license-verify]');
+    const feedback = dialog.querySelector('[data-license-feedback]');
+    const client = createBillingClient(w.fetch.bind(w), () => w.crypto.randomUUID());
+    const tabKey = 'course-helper.huayi.authorization';
+    let verifiedKey = '', remaining = null, checking = false;
+    let lastVerifyTime = 0, fromShared = false;
+    let autoAuthorization = null, autoUsed = false, stableBatch = '', stableSince = 0;
+    let repurchaseOffer = null;
+    let returnFocus, scrollState;
+    let receipts = { key: '', rows: [], cursor: null, busy: false, nextReadAt: 0, message: '' };
+    function readTab() {
+      return new Promise(resolve => {
+        const timeout = w.setTimeout(() => resolve(null), 1500);
+        try {
+          GM_getTab(tab => {
+            w.clearTimeout(timeout);
+            resolve(tab && typeof tab === 'object' ? tab : null);
+          });
+        } catch { w.clearTimeout(timeout); resolve(null); }
+      });
+    }
+    async function saveTabAuthorization(licenseKey) {
+      if (!tabStorageAvailable) return false;
+      const href = w.location.href, requestEpoch = epoch, requestNavigationEpoch = navigationEpoch;
+      const current = () => alive && (!videoAuthorization ||
+        (requestEpoch === epoch && requestNavigationEpoch === navigationEpoch && href === w.location.href));
+      const tab = await readTab();
+      if (!tab || !current()) return false;
+      const origin = w.location.origin;
+      const expires = Date.now() + 2 * 60 * 60 * 1000;
+      try {
+        await GM_saveTab({ ...tab, [tabKey]: { licenseKey, origin, expires } });
+        if (!current()) return false;
+        const saved = (await readTab())?.[tabKey];
+        return current() && saved?.origin === origin && saved.licenseKey === licenseKey && saved.expires === expires;
+      } catch { return false; }
+    }
+    async function forgetRejectedAuthorization(licenseKey) {
+      verifiedKey = '';
+      remaining = null;
+      shared?.clear(licenseKey);
+      if (!tabStorageAvailable) return;
+      const tab = await readTab();
+      if (tab?.[tabKey]?.licenseKey !== licenseKey || tab[tabKey].origin !== w.location.origin) return;
+      delete tab[tabKey];
+      try { await GM_saveTab(tab); } catch { /* The server still rejects this Token. */ }
+    }
+    function armExam() {
+      autoUsed = false;
+      autoAuthorization = { href: w.location.href, epoch };
+      stableBatch = '';
+    }
+    function renderBilling() {
+      if (receipts.key !== verifiedKey) renderReceipts();
+      const busy = checking || examActionPending || readingTabAuthorization || receipts.busy;
+      billing.querySelector('[data-license-state]').textContent = verifiedKey ? '正常' : '未授权';
+      billing.querySelector('[data-license-remaining]').textContent = remaining ?? '—';
+      billing.querySelector('[data-license-mask]').textContent = verifiedKey ? `${verifiedKey.slice(0, 4)}-****-****-${verifiedKey.slice(-4)}` : '未设置';
+      billing.querySelector('[data-license-note]').textContent = verifiedKey && remaining === 0 ? '授权次数不足，请充值。' : '';
+      inline.hidden = !!verifiedKey;
+      if (verifiedKey) inline.querySelector('input').value = '';
+      for (const root of [panel, dialog]) root.querySelector('[data-token-service="new"]').hidden = !!verifiedKey;
+      for (const el of billing.querySelectorAll('button, input')) el.disabled = busy;
+      change.disabled = busy;
+      verifyButton.disabled = token.disabled = checking;
+    }
+    function openGuide() {
+      if (dialog.open || checking || examActionPending || readingTabAuthorization) return;
+      if (videoAuthorization && (enabled || currentVideo()?.paused === false)) {
+        const video = currentVideo();
+        stop('请先完成 Token 验证。');
+        pendingVideoStart = { video, context: videoContext(video), href: w.location.href, navigationEpoch };
+      }
+      feedback.textContent = '';
+      returnFocus = d.activeElement;
+      scrollState = { x: w.scrollX, y: w.scrollY, styles: [d.documentElement, d.body].map(node => [node,
+        ['overflow-x', 'overflow-y'].map(name => [name, node.style.getPropertyValue(name), node.style.getPropertyPriority(name)])]) };
+      for (const [node] of scrollState.styles) node.style.setProperty('overflow', 'hidden', 'important');
+      panel.hidden = true;
+      dialog.showModal();
+      token.focus({ preventScroll: true });
+    }
+    function closeGuide() { if (!checking) dialog.close(); }
+    function showBilling(message, state = 'working') {
+      billing.querySelector('[data-billing-detail]').textContent = message;
+      const brief = message.split('\n').filter(line => !/^requestId:|^余额快照：/.test(line)).slice(0, 2).join('\n');
+      if (status.textContent !== brief && panel.hasAttribute('data-collapsed')) {
+        panel.querySelector('[data-dock-toggle]').setAttribute('data-notice', '');
+      }
+      status.textContent = brief;
+      status.dataset.state = state;
+      if (isExam) {
+        examStatusMessage = message;
+        if (!examPaused) say(message);
+      }
+    }
+    async function checkBalance(candidate, authorizing) {
+      if (checking || examActionPending || !alive || !validLicenseFormat(candidate)) {
+        if (authorizing && !checking) feedback.textContent = '请输入有效的题库 Token。';
+        return;
+      }
+      const href = w.location.href, requestEpoch = epoch, requestNavigationEpoch = navigationEpoch;
+      checking = true;
+      renderBilling();
+      if (authorizing) feedback.textContent = '正在验证 Token…';
+      else showBilling('正在刷新余额…');
+      try {
+        const result = await client.balance(candidate);
+        if (!alive || requestEpoch !== epoch || href !== w.location.href || (videoAuthorization && requestNavigationEpoch !== navigationEpoch)) return;
+        remaining = result.remaining;
+        if (authorizing) {
+          lastVerifyTime = Date.now();
+          const linked = shared?.save(candidate, remaining, lastVerifyTime, 'bind') === true;
+          const saved = linked || await saveTabAuthorization(candidate);
+          if (!alive || requestEpoch !== epoch || href !== w.location.href || (videoAuthorization && requestNavigationEpoch !== navigationEpoch)) return;
+          verifiedKey = candidate;
+          fromShared = linked;
+          token.value = '';
+          dialog.close();
+          if (isExam) {
+            armExam();
+            showBilling('Token 验证成功，题目就绪后自动查题。');
+          } else showBilling(`Token 验证成功，剩余 ${remaining} 次。` +
+            (linked ? '华医和河南平台将共用此 Token。' : saved ? '同一标签页进入考试时将自动沿用。' :
+              '当前环境无法跨页沿用，进入考试后请重新验证。'), 'success');
+        } else {
+          shared?.save(candidate, remaining, Date.now(), 'balance');
+          showBilling(`余额已刷新，剩余 ${remaining} 次。`, 'success');
+        }
+      } catch (error) {
+        const message = error.message === 'INVALID_LICENSE' ? 'Token 无效，请检查输入。' :
+          error.message === 'LICENSE_DISABLED' ? 'Token 已停用。' :
+          error.message === 'RATE_LIMITED' ? '请求较频繁，请稍后再试。' : '暂时无法核对 Token，请稍后再试。';
+        if (authorizing) feedback.textContent = message;
+        else if (alive && requestEpoch === epoch && href === w.location.href && (!videoAuthorization || requestNavigationEpoch === navigationEpoch)) {
+          if (['INVALID_LICENSE', 'LICENSE_DISABLED'].includes(error.message)) {
+            await forgetRejectedAuthorization(candidate);
+          }
+          showBilling(message, 'warning');
+        }
+      } finally {
+        checking = false;
+        renderBilling();
+        if (videoAuthorization) {
+          if (authorizing && (requestEpoch !== epoch || href !== w.location.href || requestNavigationEpoch !== navigationEpoch)) {
+            feedback.textContent = '页面或播放状态已变化，请重新验证 Token。';
+          }
+          finishVideoAuthorization();
+        }
+      }
+    }
+    for (const form of [dialog.querySelector('form'), inline]) {
+      form.onsubmit = event => event.preventDefault();
+      form.querySelector('button[type="submit"]').onclick = event => {
+        event.preventDefault();
+        if (event.isTrusted) void checkBalance(form.querySelector('input').value.trim(), true);
+      };
+    }
+    dialog.querySelector('[data-license-close]').onclick = closeGuide;
+    dialog.querySelector('[data-license-later]').onclick = closeGuide;
+    dialog.addEventListener('cancel', event => { event.preventDefault(); closeGuide(); });
+    dialog.addEventListener('close', () => {
+      token.value = '';
+      if (scrollState) {
+        for (const [node, properties] of scrollState.styles) for (const [name, value, priority] of properties) {
+          if (value) node.style.setProperty(name, value, priority);
+          else node.style.removeProperty(name);
+        }
+        w.scrollTo(scrollState.x, scrollState.y);
+        scrollState = null;
+      }
+      panel.hidden = false;
+      if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
+      returnFocus = null;
+      if (videoAuthorization && !verifiedKey && pendingVideoStart) pauseByUser('未绑定 Token，自动流程已暂停。');
+      if (!isExam) tick();
+      else examSubmission?.scheduleCheck();
+    });
+    change.onclick = async event => {
+      if (!event.isTrusted || !w.confirm('确认更换Token？')) return;
+      if (verifiedKey) await forgetRejectedAuthorization(verifiedKey);
+      autoAuthorization = null;
+      paid = null;
+      resumeExamFill = null;
+      renderBilling();
+      openGuide();
+    };
+    refresh.onclick = event => {
+      if (!event.isTrusted) return;
+      canUseBinding(verifiedKey);
+      if (verifiedKey) void checkBalance(verifiedKey, false);
+      else openGuide();
+    };
+    for (const root of [panel, dialog]) root.querySelector('[data-token-service="topup"]').onclick = event => {
+      const candidate = (root === dialog ? token : inline.querySelector('input')).value.trim() || verifiedKey;
+      if (!validLicenseFormat(candidate)) return;
+      event.preventDefault();
+      const url = new URL(event.currentTarget.href);
+      url.hash = `topup?token=${encodeURIComponent(candidate)}`;
+      w.open(url.href, '_blank', 'noopener,noreferrer');
+    };
+    async function initializeGuide() {
+      const binding = shared?.read();
+      if (binding) {
+        verifiedKey = binding.licenseKey;
+        lastVerifyTime = binding.lastVerifyTime;
+        fromShared = true;
+        if (isExam) armExam();
+        else remaining = binding.remaining;
+        showBilling(isExam ? '已沿用绑定的 Token，题目就绪后自动查题。' : '已沿用绑定的 Token。', 'success');
+        renderBilling();
+        return;
+      }
+      if (binding === null || !tabStorageAvailable) { if (showGuide) openGuide(); return; }
+      const href = w.location.href, requestNavigationEpoch = navigationEpoch;
+      readingTabAuthorization = true;
+      renderBilling();
+      const record = (await readTab())?.[tabKey];
+      if (!alive || href !== w.location.href || (videoAuthorization && requestNavigationEpoch !== navigationEpoch)) { readingTabAuthorization = false; return; }
+      if (record?.origin === w.location.origin && Number.isFinite(record.expires) &&
+          record.expires > Date.now() && typeof record.licenseKey === 'string' &&
+          validLicenseFormat(record.licenseKey)) {
+        verifiedKey = record.licenseKey;
+        if (shared) {
+          try {
+            const balance = await client.balance(verifiedKey);
+            if (!alive || href !== w.location.href || (videoAuthorization && requestNavigationEpoch !== navigationEpoch)) {
+              if (videoAuthorization) verifiedKey = '';
+              return;
+            }
+            lastVerifyTime = Date.now();
+            fromShared = shared.save(verifiedKey, balance.remaining, lastVerifyTime, 'migrate');
+            if (!isExam) remaining = balance.remaining;
+          } catch (error) {
+            if (videoAuthorization && (!alive || href !== w.location.href || requestNavigationEpoch !== navigationEpoch)) {
+              verifiedKey = '';
+              return;
+            }
+            if (['INVALID_LICENSE', 'LICENSE_DISABLED'].includes(error.message)) {
+              await forgetRejectedAuthorization(verifiedKey);
+            } else verifiedKey = '';
+            readingTabAuthorization = false;
+            if (showGuide) openGuide();
+            renderBilling(); return;
+          } finally { readingTabAuthorization = false; }
+        }
+        if (isExam) armExam();
+        showBilling(isExam ? '已沿用本标签页验证的 Token，题目就绪后自动查题。' : '已沿用本标签页验证的 Token。', 'success');
+      } else {
+        readingTabAuthorization = false;
+        if (showGuide) openGuide();
+      }
+      readingTabAuthorization = false;
+      renderBilling();
+      tick();
+    }
+    const journal = new QueryJournal(() => w.sessionStorage);
+    journal.key = 'course-helper.huayi.requests.v1';
+    function renderReceipts() {
+      if (receipts.key !== verifiedKey) receipts = { key: verifiedKey, rows: [], cursor: null, busy: false, nextReadAt: 0, message: '' };
+      billing.querySelector('[data-receipt-note]').textContent = receipts.message || '服务端账务记录；核对不扣费。';
+      billing.querySelector('[data-receipt-more]').hidden = !receipts.cursor;
+      const fragment = d.createDocumentFragment();
+      const labels = { success: '成功', failed: '失败（本次未扣费）', processing: '处理中 · 待确认', unknown: '结果待确认' };
+      const localRows = journal.read();
+      for (const row of receipts.rows) {
+        const item = d.createElement('div'); item.className = 'helper-receipt';
+        const title = d.createElement('strong');
+        title.textContent = localRows.find(record => record.requestId === row.requestId)?.title || '其他页面的查询';
+        const summary = d.createElement('div');
+        summary.textContent = `${new Date(row.createdAt).toLocaleString('zh-CN', { hour12: false })} · ${labels[row.status]}${row.archived ? '（历史扣费）' : ''}\n返回 ${row.questionCount} 题 · 扣 ${row.charged} 次`;
+        const id = d.createElement('small'); id.textContent = `请求编号：${row.requestId}`;
+        item.append(title, summary, id); fragment.append(item);
+      }
+      billing.querySelector('[data-receipt-list]').replaceChildren(fragment);
+    }
+    async function refreshReceipts(more = false) {
+      if (receipts.busy || checking || examActionPending) return;
+      if (!verifiedKey) { openGuide(); return; }
+      if (!canUseBinding(verifiedKey)) return;
+      renderReceipts();
+      if (Date.now() < receipts.nextReadAt) {
+        receipts.message = '记录刚刚读取过，请稍后再刷新。'; renderReceipts(); return;
+      }
+      const key = verifiedKey;
+      receipts.busy = true; receipts.message = '正在读取服务端账务…'; renderReceipts(); renderBilling();
+      try {
+        const data = await client.receipts(key, null, more ? receipts.cursor : null);
+        if (!alive || verifiedKey !== key || !canUseBinding(key)) return;
+        receipts.rows = more ? [...receipts.rows, ...data.items].slice(-100) : data.items;
+        receipts.cursor = data.nextCursor;
+        receipts.message = data.items.length ? '以下为服务端账务；余额已同步。' : '暂未查到记录，不代表进行中的请求未扣费。';
+        remaining = data.remaining;
+        shared?.save(key, remaining, lastVerifyTime, 'balance');
+      } catch (error) {
+        receipts.message = error.message === 'RATE_LIMITED' ? '请求较频繁，请一分钟后再核对。' : '账务暂时无法确认，请稍后核对，不要重复购买。';
+      } finally {
+        receipts.busy = false; receipts.nextReadAt = Date.now() + 30000;
+        if (alive) { renderReceipts(); renderBilling(); }
+      }
+    }
+    billing.querySelector('[data-receipt-refresh]').onclick = () => void refreshReceipts();
+    billing.querySelector('[data-receipt-more]').onclick = () => void refreshReceipts(true);
+    billing.querySelector('[data-export-diagnostic]').onclick = () => {
+      const link = d.createElement('a');
+      let url;
+      try {
+        const snapshot = { version: huayiHelperView.version, time: new Date().toISOString(),
+          page: pageKind(w.location.href), paused: isExam ? examPaused : !enabled, licensed: !!verifiedKey,
+          remainingSnapshot: remaining, queryPending: examActionPending, trackingAvailable: !journal.unavailable,
+          media: activeVideo ? { readyState: activeVideo.readyState, networkState: activeVideo.networkState,
+            paused: activeVideo.paused, ended: activeVideo.ended, errorCode: activeVideo.error?.code || null } : null };
+        url = w.URL.createObjectURL(new Blob([JSON.stringify(snapshot, null, 2)], { type: 'text/plain;charset=utf-8' }));
+        link.href = url;
+        link.download = `course-helper-diagnostic-v${snapshot.version}-${snapshot.time.replace(/[:.]/g, '-')}.txt`;
+        link.hidden = true; d.body.append(link); link.click();
+        w.setTimeout(() => w.URL.revokeObjectURL(url), 10000);
+        showBilling('已发起脱敏诊断下载，请查看浏览器下载列表；文件不包含Token、登录凭据和题目内容。');
+      } catch {
+        if (url) w.URL.revokeObjectURL(url);
+        showBilling('诊断导出未完成，请检查浏览器下载权限后重试。', 'warning');
+      } finally { link.remove(); }
+    };
+    const digest = async value => Array.from(new Uint8Array(await w.crypto.subtle.digest(
+      'SHA-256', new TextEncoder().encode(value))), byte => byte.toString(16).padStart(2, '0')).join('');
+    function canUseBinding(licenseKey) {
+      const current = shared?.read();
+      if ((!fromShared && current === undefined) || current?.licenseKey === licenseKey) return true;
+      autoAuthorization = null;
+      repurchaseOffer = null;
+      paid = null;
+      verifiedKey = current?.licenseKey ?? '';
+      lastVerifyTime = current?.lastVerifyTime ?? 0;
+      remaining = current?.remaining ?? null;
+      fromShared = !!current;
+      renderReceipts();
+      renderBilling();
+      showBilling(current ? '已更新共享 Token，请核对后再点击查题。' : '共享 Token 已清除，请重新验证。', 'warning');
+      return false;
+    }
+    async function queryExam(parsed, context, automatic = false, confirmedOffer = null) {
+      if (examActionPending || checking || receipts.busy || !alive || pageKind(w.location.href) !== 'exam') return;
+      if (automatic && examPaused) return;
+      const licenseKey = verifiedKey;
+      if (!licenseKey) { openGuide(); return; }
+      if (!canUseBinding(licenseKey)) return;
+      if (!parsed.hints.length || !context) {
+        showBilling('需要完整题目和课件标识，请从课程入口进入考试。', 'warning');
+        return;
+      }
+      autoUsed = true;
+      autoAuthorization = null;
+      repurchaseOffer = null;
+      examActionPending = true;
+      renderBilling();
+      const fingerprint = JSON.stringify(context), href = w.location.href, requestEpoch = epoch;
+      const active = () => alive && epoch === requestEpoch && w.location.href === href;
+      const sameExam = current => active() && JSON.stringify(examBatch(current)) === fingerprint;
+      function deferAutomaticQuery() {
+        if (!automatic || !examPaused) return false;
+        armExam();
+        return true;
+      }
+      let identity, job, replayReceipt;
+      try {
+        const owner = await digest(licenseKey);
+        identity = { owner, scope: await digest(JSON.stringify([owner, w.location.origin, fingerprint])), title: '华医考试' };
+        if (!active() || !canUseBinding(licenseKey) || deferAutomaticQuery()) return;
+        const previous = journal.find(identity.scope);
+        if (confirmedOffer?.scope && (confirmedOffer.scope !== identity.scope || confirmedOffer.requestId !== previous?.requestId ||
+            previous.state === 'failed')) {
+          showBilling('题目或原请求已变化，本次未发起新的收费请求。', 'warning');
+          return;
+        }
+        if (!automatic && !confirmedOffer && !previous && paid?.scope !== identity.scope) {
+          showBilling('没有可重试的请求。', 'warning');
+          return;
+        }
+        let result, reused = !confirmedOffer && paid?.scope === identity.scope;
+        if (reused) result = paid.result;
+        else {
+          if (automatic && previous?.state === 'failed') {
+            showBilling('此前查题未成功。请核对后手动重试。', 'warning');
+            return;
+          }
+          if (previous && previous.state !== 'failed') {
+            showBilling('正在核对原请求账务…');
+            const receipt = await client.receipts(licenseKey, previous.requestId);
+            if (!active() || !canUseBinding(licenseKey)) return;
+            remaining = receipt.remaining;
+            shared?.save(licenseKey, remaining, lastVerifyTime, 'balance');
+            const row = receipt.items.find(item => item.requestId === previous.requestId && !item.archived);
+            if (row?.status === 'failed' && row.charged === 0) {
+              journal.put({ ...identity, requestId: previous.requestId, state: 'failed', cost: 0 });
+              showBilling(`原请求失败，余额 ${remaining} 次。再次点击可发起新查询。`, 'warning');
+              return;
+            }
+            if (row?.status !== 'success') {
+              showBilling('原请求结果待确认，请稍后核对账务。', 'warning');
+              return;
+            }
+            const age = Date.parse(receipt.serverTime) - Date.parse(row.completedAt);
+            if (!Number.isFinite(age) || age < 0) {
+              showBilling('原请求已扣费，但暂时无法确认答案恢复时限。本次未发起新查询。', 'warning');
+              return;
+            }
+            if (age > 30000) {
+              if (!confirmedOffer) {
+                repurchaseOffer = { scope: identity.scope, requestId: row.requestId };
+                showBilling(`原请求已扣 ${row.charged} 次，余额 ${remaining} 次。已超出 30 秒答案恢复时限。`, 'success');
+                return;
+              }
+            } else if (!confirmedOffer) replayReceipt = row;
+          }
+          if (!sameExam(parseQuestions())) { showBilling('题目已变化，请重新确认后查询。', 'warning'); return; }
+          if (deferAutomaticQuery()) return;
+          if (journal.unavailable) { showBilling('浏览器无法读取请求记录，本次未发起查询。', 'warning'); return; }
+          job = client.makeJob(context, licenseKey);
+          if (replayReceipt) {
+            job.requestId = replayReceipt.requestId;
+            showBilling('正在用原请求取回答案…');
+          } else {
+            if (!automatic && !confirmedOffer && previous?.state === 'failed') job.requestId = previous.requestId;
+            journal.put({ ...identity, requestId: job.requestId, state: 'processing' });
+            if (journal.unavailable) {
+              showBilling('浏览器无法保存请求编号，本次未发起查询。', 'warning');
+              return;
+            }
+            showBilling('正在查询题库…');
+          }
+          result = await client.query(job, !!replayReceipt);
+          journal.put({ ...identity, requestId: job.requestId, state: 'success', count: result.questionCount,
+            cost: result.charged || result.originalCharged });
+          paid = { scope: identity.scope, result };
+          if (!active() || verifiedKey !== licenseKey || !canUseBinding(licenseKey)) return;
+          if (!replayReceipt || result.charged > 0) {
+            remaining = result.remaining;
+            shared?.save(licenseKey, remaining, lastVerifyTime, 'balance');
+          }
+        }
+        const applyAnswers = () => {
+          if (!active() || !canUseBinding(licenseKey)) return;
+          const current = parseQuestions();
+          const layout = JSON.stringify(current.hints);
+          const layoutUnchanged = () => {
+            if (!active() || examPaused) return false;
+            const latest = parseQuestions();
+            return JSON.stringify(latest.hints) === layout && latest.controls?.every((inputs, row) =>
+              inputs.every((input, column) => input === current.controls[row]?.[column]));
+          };
+          const count = sameExam(current) ? fillExam(result, current, layoutUnchanged) : 0;
+          const needsReview = count < result.questionCount || count < parsed.hints.length;
+          showBilling(`返回 ${result.questionCount} 题，填入 ${count} 题，本次扣 ${reused ? 0 : result.charged} 次。` +
+            (reused ? '' : ` 余额 ${remaining} 次。`) +
+            (needsReview ? ' 请手动核对其余题目。' : ' 答案已填入。'), needsReview ? 'warning' : 'success');
+        };
+        if (examPaused) {
+          resumeExamFill = applyAnswers;
+          showBilling('已收到题库结果；恢复考试自动化后继续填入。');
+        } else applyAnswers();
+      } catch (error) {
+        const messages = {
+          QUESTION_BANK_MISS: '题库未覆盖本次所需题目，本次未扣费。',
+          INVALID_LICENSE: 'Token 无效，本次未扣费。',
+          LICENSE_DISABLED: 'Token 已停用，本次未扣费。',
+          INSUFFICIENT_BALANCE: '余额不足，本次未扣费。',
+          INVALID_REQUEST: '查题参数不完整，本次未扣费。',
+          NO_VALID_QUESTIONS: '未取得可用答案，本次未扣费。',
+          PAYLOAD_TOO_LARGE: '题目超出接口大小限制，本次未扣费。',
+          CLIENT_BUSY: '已有请求在处理，本次未发起收费查询。',
+          RATE_LIMITED: '请求较频繁，本次未扣费。',
+          IDEMPOTENCY_KEY_EXPIRED: '已超出 30 秒答案恢复时限，本次未新增扣费。'
+        };
+        if (job && !job.result && !replayReceipt) {
+          const failed = !job.attempted || Object.hasOwn(messages, error.message);
+          journal.put({ ...identity, requestId: job.requestId, state: failed ? 'failed' : 'uncertain', cost: failed ? 0 : null });
+        }
+        if (active() && ['INVALID_LICENSE', 'LICENSE_DISABLED'].includes(error.message)) {
+          await forgetRejectedAuthorization(licenseKey);
+        } else if (active() && error.message === 'INSUFFICIENT_BALANCE' && canUseBinding(licenseKey)) {
+          remaining = 0;
+          shared?.save(licenseKey, remaining, lastVerifyTime, 'balance');
+        }
+        if (active()) showBilling(Object.hasOwn(messages, error.message) ? messages[error.message] :
+          '请求或账务未能确认，请再次点击核对原请求。', 'warning');
+      } finally {
+        examActionPending = false;
+        renderBilling();
+      }
+    }
+    button.onclick = event => {
+      if (!event.isTrusted) return;
+      const parsed = parseQuestions();
+      void queryExam(parsed, examBatch(parsed));
+    };
+    repurchase.onclick = event => {
+      if (!event.isTrusted) return;
+      if (!verifiedKey) { openGuide(); return; }
+      const offer = repurchaseOffer || {};
+      if (!w.confirm('新建收费请求可能重复扣费，是否继续？')) return;
+      const parsed = parseQuestions();
+      void queryExam(parsed, examBatch(parsed), false, offer);
+    };
+    checkAutoExam = parsed => {
+      if (examPaused || !autoAuthorization || autoUsed || examActionPending || checking || dialog.open ||
+          autoAuthorization.href !== w.location.href || autoAuthorization.epoch !== epoch) return;
+      const context = parsed.hints.length ? examBatch(parsed) : null;
+      const fingerprint = context ? JSON.stringify(context) : '';
+      if (fingerprint !== stableBatch) {
+        stableBatch = fingerprint;
+        stableSince = Date.now();
+        return;
+      }
+      if (context && Date.now() - stableSince >= 600) void queryExam(parsed, context, true);
+    };
+    renderReceipts();
+    renderBilling();
+    if (!isExam && pageKind(w.location.href) === 'video') {
+      videoAuthorization = { ready: false, open: openGuide, allowed: () => {
+        if (verifiedKey) canUseBinding(verifiedKey);
+        return !!verifiedKey;
+      } };
+      void initializeGuide().then(() => {
+        if (!alive) return;
+        readingTabAuthorization = false;
+        renderBilling();
+        videoAuthorization.ready = true;
+        finishVideoAuthorization();
+      });
+    } else void initializeGuide();
+  }
+  function waiting(message, since, duration) {
+    const remaining = Math.max(0, Math.ceil((duration - (Date.now() - since)) / 1000));
+    say(`${message}（剩余 ${remaining} 秒）`);
+  }
+  function clearWatchers() {
+    if (examNavigationTimer !== null) w.clearTimeout(examNavigationTimer);
+    examNavigationTimer = null;
+    if (videoPauseTimer !== null) w.clearTimeout(videoPauseTimer);
+    videoPauseTimer = null; reminderRecovery = null; mediaPauseIntent = null; mediaPlayIntent = null; buffering = null;
+    if (timer !== null) w.clearInterval(timer);
+    if (scheduled !== null) w.clearTimeout(scheduled);
+    timer = scheduled = null;
+    observer?.disconnect(); observer = null;
+    for (const [video, handlers] of bound) {
+      for (const [name, handler] of handlers) video.removeEventListener(name, handler);
+      playAttempts.delete(video);
+    }
+    bound.clear();
+  }
+  function backgroundPlaybackActive() {
+    return alive && enabled && !pausedByUser && !pageAway && !restoreWatchers && !navigating &&
+      d.visibilityState === 'hidden' && pageKind(w.location.href) === 'video' &&
+      activeVideo?.isConnected && !activeVideo.paused && !activeVideo.ended;
+  }
+  function stopLocalRtc() {
+    const rtc = localRtc;
+    localRtc = null;
+    if (!rtc) return;
+    w.clearTimeout(rtc.timeout);
+    for (const resource of [...rtc.channels, ...rtc.peers]) {
+      try { resource.close(); } catch { /* Already closed. */ }
+    }
+  }
+  function stopBackgroundKeepalive() {
+    const title = backgroundTitle;
+    backgroundTitle = null;
+    if (title) {
+      w.clearInterval(title.timer);
+      if (d.title === title.owned) d.title = title.base;
+    }
+    stopLocalRtc();
+    rtcRetryAt = rtcFailures = 0;
+  }
+  function startLocalRtc() {
+    if (localRtc || Date.now() < rtcRetryAt || typeof w.RTCPeerConnection !== 'function') return;
+    const rtc = { peers: [], channels: [], pending: [[], []], chains: [Promise.resolve(), Promise.resolve()],
+      started: Date.now(), disconnectedAt: null, opened: false, timeout: null };
+    localRtc = rtc;
+    const valid = () => localRtc === rtc && backgroundPlaybackActive();
+    const fail = () => {
+      if (localRtc !== rtc) return;
+      stopLocalRtc();
+      rtcFailures++;
+      rtcRetryAt = Date.now() + Math.min(30000, 2000 * 2 ** Math.min(4, rtcFailures - 1));
+    };
+    rtc.fail = fail;
+    function addCandidate(target, candidate) {
+      if (!candidate || !valid()) return;
+      const peer = rtc.peers[target];
+      if (!peer.remoteDescription) {
+        if (rtc.pending[target].length < 32) rtc.pending[target].push(candidate);
+        return;
+      }
+      rtc.chains[target] = rtc.chains[target].then(() => {
+        if (valid()) return peer.addIceCandidate(candidate);
+      }).catch(fail);
+    }
+    function checkOpen() {
+      if (!valid() || rtc.opened || rtc.channels.length !== 2 || rtc.channels.some(channel => channel.readyState !== 'open')) return;
+      if (Date.now() - rtc.started > 12000) { fail(); return; }
+      rtc.opened = true;
+      w.clearTimeout(rtc.timeout);
+      rtcRetryAt = rtcFailures = 0;
+    }
+    function bindChannel(channel) {
+      rtc.channels.push(channel);
+      channel.onopen = checkOpen;
+      channel.onerror = channel.onclose = fail;
+      checkOpen();
+    }
+    try {
+      // Same-tab peers only. No media, external ICE servers or application payloads.
+      const a = new w.RTCPeerConnection({ iceServers: [] });
+      rtc.peers.push(a);
+      const b = new w.RTCPeerConnection({ iceServers: [] });
+      rtc.peers.push(b);
+      a.onicecandidate = event => addCandidate(1, event.candidate);
+      b.onicecandidate = event => addCandidate(0, event.candidate);
+      b.ondatachannel = event => {
+        if (valid()) bindChannel(event.channel);
+        else event.channel.close();
+      };
+      bindChannel(a.createDataChannel('huayi-local-playback'));
+      for (const peer of rtc.peers) peer.onconnectionstatechange = () => {
+        if (!valid()) return;
+        if (['failed', 'closed'].includes(peer.connectionState)) { fail(); return; }
+        rtc.disconnectedAt = rtc.peers.some(item => item.connectionState === 'disconnected') ?
+          (rtc.disconnectedAt ?? Date.now()) : null;
+      };
+      rtc.timeout = w.setTimeout(fail, 12000);
+      void (async () => {
+        const offer = await a.createOffer();
+        if (!valid()) return;
+        await a.setLocalDescription(offer);
+        if (!valid()) return;
+        await b.setRemoteDescription(a.localDescription);
+        if (!valid()) return;
+        for (const candidate of rtc.pending[1].splice(0)) addCandidate(1, candidate);
+        const answer = await b.createAnswer();
+        if (!valid()) return;
+        await b.setLocalDescription(answer);
+        if (!valid()) return;
+        await a.setRemoteDescription(b.localDescription);
+        if (!valid()) return;
+        for (const candidate of rtc.pending[0].splice(0)) addCandidate(0, candidate);
+      })().catch(fail);
+    } catch { fail(); }
+  }
+  function syncBackgroundKeepalive() {
+    if (!backgroundPlaybackActive()) { stopBackgroundKeepalive(); return; }
+    if (!backgroundTitle) {
+      const title = { base: d.title, owned: null, alternate: false, timer: null };
+      backgroundTitle = title;
+      title.timer = w.setInterval(() => {
+        if (backgroundTitle !== title) return;
+        if (!backgroundPlaybackActive()) { stopBackgroundKeepalive(); return; }
+        if (d.title !== (title.owned ?? title.base)) title.base = d.title;
+        title.owned = (title.alternate ? '后台播放' : '学习中') + (title.base ? ' · ' + title.base : '');
+        title.alternate = !title.alternate;
+        d.title = title.owned;
+      }, 1300);
+    }
+    if (localRtc?.disconnectedAt != null && Date.now() - localRtc.disconnectedAt >= 10000) localRtc.fail();
+    startLocalRtc();
+  }
+  function stop(message, pause = true) {
+    pendingVideoStart = null;
+    pendingExam = null;
+    enabled = false; restoreWatchers = false; recoveryVideo = null; epoch++; save(); clearWatchers();
+    stopBackgroundKeepalive();
+    if (pause) for (const video of d.querySelectorAll('video')) { try { video.pause(); } catch {} }
+    say(message);
+  }
+  function pauseByUser(message, pause = true) {
+    pausedByUser = true;
+    stop(message, pause);
+  }
+  function currentVideo() {
+    const videos = [...d.querySelectorAll('video')];
+    return videos.find(video => !video.hidden && (video.offsetWidth || video.offsetHeight)) || videos[0] || null;
+  }
+  function clearUserActivity() {
+    if (userActivityTimer !== null) w.clearTimeout(userActivityTimer);
+    userActivityTimer = null;
+    for (const timerId of userActivityBurstTimers) w.clearTimeout(timerId);
+    userActivityBurstTimers.clear();
+  }
+  function scheduleUserActivity(delay = 5 * 60 * 1000 + Math.random() * 5 * 60 * 1000) {
+    if (userActivityTimer !== null || !alive || pageKind(w.location.href) !== 'video') return;
+    const href = w.location.href;
+    userActivityTimer = w.setTimeout(() => {
+      userActivityTimer = null;
+      if (!alive || pageAway || frozen || href !== w.location.href || pageKind(w.location.href) !== 'video') return;
+      const rect = currentVideo()?.getBoundingClientRect();
+      const area = rect?.width > 0 && rect?.height > 0 ? rect : {
+        left: w.innerWidth * 0.2, top: w.innerHeight * 0.2,
+        width: w.innerWidth * 0.6, height: w.innerHeight * 0.6
+      };
+      for (let i = 0; i < 3; i++) {
+        const timerId = w.setTimeout(() => {
+          userActivityBurstTimers.delete(timerId);
+          if (!alive || pageAway || frozen || href !== w.location.href || pageKind(w.location.href) !== 'video') return;
+          d.dispatchEvent(new w.MouseEvent('mousemove', {
+            view: w, bubbles: true, cancelable: true,
+            clientX: area.left + Math.random() * area.width,
+            clientY: area.top + Math.random() * area.height
+          }));
+        }, i * 200);
+        userActivityBurstTimers.add(timerId);
+      }
+      scheduleUserActivity();
+    }, delay);
+  }
+  function videoFinished(video) {
+    if (!video) return false;
+    const context = videoContext(video);
+    if (video.ended) completedVideos.set(video, context);
+    return completedVideos.get(video) === context;
+  }
+  function requireVideoAuthorization() {
+    if (!billingOrigin || pageKind(w.location.href) !== 'video' ||
+        (videoAuthorization?.allowed() && !tokenGuide?.open)) return true;
+    const video = currentVideo();
+    if (enabled) stop('请先完成 Token 验证。');
+    else for (const item of d.querySelectorAll('video')) { try { item.pause(); } catch {} }
+    pendingVideoStart = { video, context: videoContext(video), href: w.location.href, navigationEpoch };
+    say(videoAuthorization?.ready ? '请先绑定 Token，验证后继续播放。' : '正在读取 Token 授权，请稍候。');
+    if (videoAuthorization?.ready) videoAuthorization.open();
+    return false;
+  }
+  function finishVideoAuthorization() {
+    const pending = pendingVideoStart;
+    if (!pending || !alive || loginExpired || pausedByUser || pageAway || frozen || restoreWatchers || navigating) return;
+    if (pending.navigationEpoch !== navigationEpoch || pending.href !== w.location.href || pending.video !== currentVideo() ||
+        (pending.video && (!pending.video.isConnected || videoContext(pending.video) !== pending.context))) {
+      pendingVideoStart = null;
+      return;
+    }
+    if (videoAuthorization?.allowed() && !tokenGuide?.open) {
+      pendingVideoStart = null;
+      start();
+    } else if (videoAuthorization?.ready) videoAuthorization.open();
+  }
+  function rememberMediaPlayIntent(event) {
+    const video = currentVideo();
+    const player = video?.closest('#player') || video?.parentElement;
+    const control = event.target.closest('button, [role="button"], [title], [aria-label], .pv-icon-btn-play, .ccH5TogglePlay');
+    const label = control?.getAttribute('aria-label') || control?.getAttribute('title') || text(control);
+    if (!event.isTrusted || !video?.paused || panel?.contains(event.target) || tokenGuide?.contains(event.target) ||
+        (event.target !== video && (player === d.body || !player?.contains(event.target))) ||
+        (event.target !== video && !/播放|继续|\bplay\b|\bresume\b/i.test(label) && !control?.matches('.pv-icon-btn-play, .ccH5TogglePlay')) ||
+        event.target.closest('input, textarea, select, [contenteditable]') ||
+        (event.type === 'keydown' && ![' ', 'k', 'K', 'MediaPlayPause', 'Enter'].includes(event.key))) return;
+    mediaPlayIntent = { video, context: videoContext(video), at: Date.now() };
+  }
+  function onVideoPlay(event) {
+    const video = event.target;
+    if (!alive || navigating || pageAway || frozen || restoreWatchers || video?.tagName !== 'VIDEO' ||
+        video !== currentVideo() || video.paused || video.ended) return;
+    if (loginExpired || handleLoginNotice() || tokenGuide?.open) { video.pause(); return; }
+    const manual = mediaPlayIntent?.video === video && mediaPlayIntent.context === videoContext(video) &&
+      Date.now() - mediaPlayIntent.at < 1000;
+    mediaPlayIntent = null;
+    if (videoFinished(video) && !manual) { video.pause(); if (enabled) tick(); return; }
+    if (manual) completedVideos.delete(video);
+    if (enabled) {
+      if (video !== activeVideo) bindVideo(video);
+      if (manual) tick();
+      return;
+    }
+    if ((pausedByUser || hasRun) && !manual) { video.pause(); return; }
+    start();
+  }
+  function onMediaPause(event) {
+    if (event.target?.tagName === 'VIDEO') onVideoPause(event.target);
+  }
+  function onMediaEnded(event) {
+    const video = event.target;
+    if (video?.tagName !== 'VIDEO' || video !== currentVideo() || !video.ended) return;
+    videoFinished(video);
+    if (enabled) {
+      if (waitSince === null) waitSince = Date.now();
+      tick();
+    }
+  }
+  function onMediaLoadStart(event) {
+    const video = event.target;
+    if (video?.tagName !== 'VIDEO' || video !== currentVideo()) return;
+    if (pendingVideoStart?.video === video) pendingVideoStart = null;
+    videoContext(video, true);
+    noteBuffering(video);
+  }
+  function invalidateVideoStart() {
+    navigationEpoch++;
+    pendingVideoStart = null;
+    mediaPlayIntent = null;
+  }
+  function navigate(url, message = '正在进入下一课件…') {
+    const u = courseURL(url);
+    if (!alive || !enabled || navigating || !u || u.searchParams.get('cwid') === currentId()) return false;
+    navigating = true; save(); clearWatchers();
+    stopBackgroundKeepalive();
+    say(message);
+    try { w.location.assign(u.href); }
+    catch { navigating = false; stop('页面未允许跳转，请手动打开下一课件。', false); return false; }
+    return true;
+  }
+  function nextCourse() {
+    const id = currentId();
+    const pending = items.find(item => item.id !== passedCourse && item.status === '待考试');
+    if (pending) {
+      if (pending.id !== id) return navigate(pending.url, '正在打开待考试课件…');
+      stop('当前课件待考试，请点击平台上的考试入口。', false);
+      return false;
+    }
+    const candidate = items.find(item => item.id !== id && item.id !== passedCourse &&
+      ['学习中', '未学习'].includes(item.status));
+    if (candidate) return navigate(candidate.url);
+    stop('未找到可继续学习的课件，请核对课程列表。');
+    return false;
+  }
+  function enterAvailableExam(confirmedPending = false) {
+    let pending = false;
+    const controls = d.querySelectorAll('button, a, input[type="button"], input[type="submit"], [role="button"], #exam, [onclick]');
+    for (const entry of controls) {
+      const anchor = entry.tagName === 'A';
+      const label = (entry.tagName === 'INPUT' ? entry.value : text(entry)).replace(/\s/g, '');
+      if (label !== '进入考试' && !(anchor && entry.id === 'exam')) continue;
+      if (entry.querySelector('button, a, input, [role="button"]')) continue;
+      if (!entry.checkVisibility({ visibilityProperty: true, opacityProperty: true })) continue;
+
+      const href = anchor ? entry.getAttribute('href')?.trim() || '' : '';
+      const placeholder = anchor && (!href || href.startsWith('#') || /^javascript:\s*void\(0\);?$/i.test(href));
+      const nativeEventEntry = anchor && entry.id === 'jrks' && href === '#' &&
+        (confirmedPending || entry.classList.contains('inputstyle2'));
+      if (anchor && !placeholder && (entry.origin !== w.location.origin || entry.username || entry.password ||
+          pageKind(entry.href) !== 'exam')) continue;
+
+      if ((placeholder && !nativeEventEntry) || entry.closest(':disabled, [disabled], [aria-disabled="true"], [inert], [data-locked="true"], .notClick, .disabled, .is-disabled, .locked') ||
+          w.getComputedStyle(entry).pointerEvents === 'none') {
+        pending = true;
+        continue;
+      }
+
+      navigating = true; save(); clearWatchers();
+      stopBackgroundKeepalive();
+      say('平台已开放考试，正在进入…');
+      const clickEpoch = epoch, pageHref = w.location.href, navigation = navigationEpoch;
+      examNavigationTimer = w.setTimeout(() => {
+        examNavigationTimer = null;
+        if (!alive || !enabled || !navigating || clickEpoch !== epoch) return;
+        const samePage = nativeEventEntry && w.location.href.split('#')[0] === pageHref.split('#')[0];
+        if (!samePage && (pageHref !== w.location.href || navigation !== navigationEpoch)) return;
+        navigating = false;
+        stop(entry.getAttribute('target') === '_blank' ? '考试入口已点击，请查看新标签页。' : '考试入口已点击但页面未跳转，请手动确认。', false);
+      }, 3000);
+      try { entry.click(); }
+      catch { navigating = false; stop('未能打开考试入口，请手动确认。', false); }
+      return 'entered';
+    }
+    return pending ? 'pending' : '';
+  }
+  function waitPendingExam(id, confirmed) {
+    if (!pendingExam || pendingExam.id !== id || pendingExam.href !== w.location.href) {
+      pendingExam = { id, href: w.location.href, at: Date.now(), video: null, context: null, seeked: false };
+    }
+    const phase = pendingExam;
+    if (Date.now() - phase.at >= 45000) {
+      stop('课件已标记待考试，但平台尚未开放考试入口，请核对平台状态。');
+      return;
+    }
+    const video = currentVideo(), context = videoContext(video);
+    if (phase.video !== video || phase.context !== context) {
+      phase.video = video; phase.context = context; phase.seeked = false;
+    }
+    if (video) bindVideo(video, false);
+    if (video && confirmed && !videoFinished(video)) {
+      if (!phase.seeked && w.navigator.onLine !== false && video.readyState >= 1 && Number.isFinite(video.duration) && video.duration > 1) {
+        const target = video.duration - 1, ranges = video.seekable;
+        const available = Array.from({ length: ranges.length }, (_, i) => ranges.start(i) <= target && ranges.end(i) >= target).some(Boolean);
+        if (available) {
+          // Only a current platform-confirmed pending exam may restore an already completed, seekable video.
+          phase.seeked = true;
+          try { video.currentTime = target; }
+          catch { stop('播放器未接受已完成课件的位置恢复，请手动确认。', false); return; }
+          if (!alive || !enabled || pausedByUser || pendingExam !== phase || context !== videoContext(video)) return;
+          playTried.delete(video);
+        }
+      }
+      if (phase.seeked) {
+        if (handleBuffering(video)) return;
+        bindVideo(video);
+        waiting('正在播放已完成课件尾段，等待平台开放考试入口…', phase.at, 45000);
+        return;
+      }
+    }
+    waiting(!confirmed ? '等待平台读取当前课件状态…' : !video || !videoFinished(video) ?
+      '课件已标记待考，正在读取播放器可回看范围…' : '当前课件待考试，等待平台开放考试入口…', phase.at, 45000);
+  }
+  function originalCourseList() {
+    try {
+      const url = new URL(home);
+      if (url.origin === w.location.origin && !url.username && !url.password && pageKind(url.href) === 'list' &&
+          url.searchParams.getAll('cid').length <= 1 && (url.searchParams.get('cid') || '') === scope) return url;
+    } catch { /* No saved course list. */ }
+    return null;
+  }
+  function courseIds(url) {
+    const params = new URL(url).searchParams;
+    return ['cwid', 'cwrid'].flatMap(name => params.getAll(name)).filter(value => /^[\w-]{1,100}$/.test(value));
+  }
+  function continueAfterResult() {
+    const results = [...new Set([...d.querySelectorAll('.tips_text')]
+      .filter(node => node.getClientRects().length && w.getComputedStyle(node).visibility === 'visible')
+      .map(text).filter(Boolean))];
+    const result = results.length === 1 ? results[0] : '';
+    say(result || '等待考试结果…');
+    if (!result) return;
+    if (!billingOrigin) { if (enabled) stop(result, false); return; }
+    const passed = ['考试通过', '完成项目学习可以申请学分了'].includes(result.replace(/[！!。]$/, ''));
+    if (!passed) {
+      if (/未通过|不通过|不合格/.test(result)) stop(result, false);
+      return;
+    }
+    if (pausedByUser) {
+      say('考试通过，续课已暂停。');
+      return;
+    }
+    const list = originalCourseList();
+    if (!list) {
+      stop('考试通过，未找到原课程列表，请手动返回。', false);
+      return;
+    }
+    const referrer = d.referrer ? new URL(d.referrer) : null;
+    const examIds = referrer?.origin === w.location.origin && pageKind(referrer.href) === 'exam' &&
+      (!referrer.searchParams.has('cid') || referrer.searchParams.get('cid') === scope) ? courseIds(referrer.href) : [];
+    const ids = new Set([...courseIds(w.location.href), ...examIds]);
+    const completed = items.filter(item => ids.has(item.id));
+    if (completed.length !== 1) {
+      stop('考试通过，未能对应原课件，请返回课程列表核对。', false);
+      return;
+    }
+    passedCourse = completed[0].id;
+    enabled = true;
+    navigating = true;
+    save();
+    clearWatchers();
+    say('考试通过，正在返回课程列表并选择下一课件…');
+    try { w.location.assign(list.href); }
+    catch { navigating = false; stop('考试通过，请手动返回课程列表。', false); }
+  }
+  function handleLoginNotice() {
+    if (!alive || pageKind(w.location.href) !== 'video') return false;
+    if (!loginExpired) {
+      let pluginNotice = false;
+      for (const box of d.querySelectorAll('.layui-layer, .el-message-box, .el-dialog, [role="dialog"], [role="alertdialog"]')) {
+        if (panel?.contains(box) || tokenGuide?.contains(box) ||
+            !box.checkVisibility({ visibilityProperty: true, opacityProperty: true })) continue;
+        const content = box.querySelector('.layui-layer-content, .el-message-box__message, .el-dialog__body') || box;
+        const message = text(content).replace(/\s/g, '');
+        if (message.includes('系统检测到此浏览器安装了异常插件')) { pluginNotice = true; continue; }
+        if (!/^(?:信息|提示)?(?:(?:登录|登陆)(?:已)?(?:过期|失效)[，,。]?)?请重新(?:登录|登陆)[。！!]?(?:确定|确认)?$/.test(message)) continue;
+        loginExpired = true;
+        stop(loginExpiredMessage);
+        if (tokenGuide?.open) tokenGuide.close();
+        statusEl.disabled = true;
+        break;
+      }
+      if (!loginExpired && pluginNotice && !platformBlockMessage) {
+        platformBlockMessage = '平台检测到异常插件，自动流程已暂停。请按平台提示处理后刷新。';
+        stop(platformBlockMessage);
+        if (tokenGuide?.open) tokenGuide.close();
+        statusEl.disabled = true;
+      }
+    }
+    if (loginExpired) say(loginExpiredMessage);
+    else if (platformBlockMessage) say(platformBlockMessage, '#c0392b');
+    return loginExpired || !!platformBlockMessage;
+  }
+  function holdExpiredPlayback(event) {
+    if (loginExpired && event.target?.tagName === 'VIDEO' && event.target.isConnected) {
+      try { event.target.pause(); } catch { /* Keep the login notice visible. */ }
+    }
+  }
+  function applyUpstreamPopupSourceBlocks() {
+    if (!alive || pageKind(w.location.href) !== 'video') return;
+    if (!popupInteractionBlocked) {
+      try {
+        if (typeof isInteraction !== 'undefined') {
+          const previous = isInteraction;
+          isInteraction = 'off';
+          if (isInteraction === 'off') {
+            popupInteractionValue = previous;
+            popupInteractionBlocked = true;
+          }
+        }
+      } catch {}
+    }
+    if (popupQuestionPlayer) return;
+    const player = w.player;
+    if (!player || typeof player.sendQuestion !== 'function') return;
+    try {
+      const descriptor = Object.getOwnPropertyDescriptor(player, 'sendQuestion');
+      const replacement = () => {};
+      player.sendQuestion = replacement;
+      if (player.sendQuestion === replacement) {
+        popupQuestionPlayer = player;
+        popupQuestionReplacement = replacement;
+        popupQuestionDescriptor = descriptor;
+      }
+    } catch {}
+  }
+  function restoreUpstreamPopupSourceBlocks() {
+    if (popupQuestionPlayer?.sendQuestion === popupQuestionReplacement) {
+      try {
+        if (popupQuestionDescriptor) Object.defineProperty(popupQuestionPlayer, 'sendQuestion', popupQuestionDescriptor);
+        else delete popupQuestionPlayer.sendQuestion;
+      } catch {}
+    }
+    try {
+      if (popupInteractionBlocked && typeof isInteraction !== 'undefined' && isInteraction === 'off') {
+        isInteraction = popupInteractionValue;
+      }
+    } catch {}
+    popupQuestionPlayer = popupQuestionReplacement = popupQuestionDescriptor = null;
+    popupInteractionBlocked = false; popupInteractionValue = undefined;
+  }
+  function playerPopupAction() {
+    const signBoxes = '.ccSignWrap, #signModal, #qiandaoModal, .sign-modal, .qiandao-modal, .sign-popup, .qiandao-popup';
+    const popupBoxes = signBoxes + ', .layer_tips, .layui-layer, .modal, .popup, .dialog, .overlay, [role="dialog"]';
+    for (const button of d.querySelectorAll('button, a, input[type="button"], input[type="submit"], [role="button"], .ccSignWrapBtn, .signBtn, .btn_sign, #signBtn, #qiandaoBtn, .sign-in-btn, .qiandao-btn, .pv-ask-skip, .close, .modal-close, [aria-label="关闭"], [onclick]')) {
+      if (!button.checkVisibility({ visibilityProperty: true, opacityProperty: true }) ||
+          panel?.contains(button) || tokenGuide?.contains(button)) continue;
+      const caption = (button.matches('input') ? button.value : text(button)).replace(/\s/g, '');
+      const help = /^\s*(?:window\.)?closeBangZhu\s*\(\s*\)\s*;?\s*$/.test(button.getAttribute('onclick') || '');
+      const skip = button.matches('.pv-ask-skip');
+      const sign = button.matches('.ccSignWrapBtn, .signBtn, .btn_sign, #signBtn, #qiandaoBtn, .sign-in-btn, .qiandao-btn') ||
+        /^(?:点击|立即|我要)?签到[！!。]?$/.test(caption);
+      const signClose = button.closest(signBoxes) && button.matches('.close, .modal-close, [aria-label="关闭"], [onclick*="close"]');
+      if (!help && !skip && !sign && !signClose) continue;
+      let box = button.closest(popupBoxes);
+      if (skip) {
+        box = null;
+        for (let parent = button.parentElement; parent && parent !== d.body; parent = parent.parentElement) {
+          if (parent.querySelector('video')) break;
+          if ([...parent.querySelectorAll('.pv-ask-head')].some(head => head.checkVisibility({ visibilityProperty: true, opacityProperty: true }))) {
+            box = parent; break;
+          }
+        }
+      } else if (!box && help) {
+        for (let parent = button.parentElement; parent && parent !== d.body; parent = parent.parentElement) {
+          if (parent.querySelector('video')) break;
+          if (/帮助|使用说明/.test(text(parent))) { box = parent; break; }
+        }
+      }
+      if (!box || box === d.body || box.querySelector('video')) continue;
+      const message = text(box).replace(/\s/g, '');
+      if (/验证码|人机|安全验证|请重新(?:登录|登陆)|(?:登录|登陆)(?:已)?(?:过期|失效)|课程学习存在异常|检测到.*(?:异常|插件)|账号.*(?:封禁|异常)|支付|扣费|充值|协议|同意/.test(message) ||
+          (!help && /考试|交卷/.test(message)) ||
+          box.querySelector('input:not([type="button"]):not([type="submit"]):not([type="hidden"]):not([type="radio"]):not([type="checkbox"]), textarea, select, [contenteditable="true"], iframe')) continue;
+      return { button, box };
+    }
+    return null;
+  }
+  function platformReminder() {
+    for (const button of d.querySelectorAll('button, a, input[type="button"], input[type="submit"], [role="button"], .rig_btn, [onclick]')) {
+      if (!/^(?:好的[，,]?)?我?知道了[！!。]?$/.test((button.matches('input') ? button.value : text(button)).replace(/\s/g, '')) ||
+          !button.checkVisibility({ visibilityProperty: true, opacityProperty: true }) || panel?.contains(button)) continue;
+      const candidateBox = button.closest('.layer_tips, .layui-layer, .modal, .popup, .dialog, [role="dialog"]');
+      const knownBox = candidateBox && text(candidateBox).replace(/\s/g, '').length <= 500 ? candidateBox : null;
+      for (let box = knownBox || button.parentElement; box && box !== d.body; box = knownBox ? null : box.parentElement) {
+        const message = text(box).replace(/\s/g, '');
+        if (message.length > 500) break;
+        const friendly = (message.includes('学习路上，您不是孤单一人') && message.includes('我们一直在这里陪伴您')) ||
+          (message.includes('看到您这么专注') && message.includes('疲劳学习')) ||
+          (message.includes('您真的很棒') && message.includes('但别忘了') && message.includes('休息是为了更好地出发')) ||
+          (message.includes('感谢您的努力') && message.includes('劳逸结合') && message.includes('保持好状态')) ||
+          (knownBox && /学习|休息|疲劳|劳逸结合/.test(message));
+        if (message.includes('温馨提示') && friendly &&
+            !/验证|登录|登陆|考试|答题|题目|交卷|人机|检测|异常|账号|账户|封禁|授权|支付|扣费|充值|协议|同意|签到|打卡|在场|身份/.test(message) &&
+            !box.querySelector('input:not([type="button"]):not([type="submit"]):not([type="hidden"]), textarea, select, [contenteditable="true"]')) {
+          return { button, box };
+        }
+      }
+    }
+    return playerPopupAction();
+  }
+  function handlePlatformReminder() {
+    let reminder = platformReminder();
+    const pendingBox = reminderRecovery?.box;
+    if (pendingBox?.isConnected && pendingBox.checkVisibility({ visibilityProperty: true, opacityProperty: true }) &&
+        (reminderRecovery.attempted || !reminder || reminder.box !== pendingBox)) reminder = reminderRecovery;
+    if (reminder) {
+      const context = videoContext(activeVideo);
+      if (reminderRecovery?.button !== reminder.button) {
+        reminderRecovery = { video: activeVideo, context, href: w.location.href, epoch, at: Date.now(), attempted: false, button: reminder.button, box: reminder.box };
+      }
+      const now = Date.now();
+      // A disconnected acknowledgement is uncertain; wait without sending another click.
+      if (w.navigator.onLine === false) {
+        reminderRecovery.offlineAt ??= now;
+        noteBuffering(activeVideo);
+        say('网络已断开，等待恢复后确认平台提示。');
+        return true;
+      }
+      if (reminderRecovery.offlineAt != null) {
+        reminderRecovery.at += now - reminderRecovery.offlineAt;
+        reminderRecovery.offlineAt = null;
+      }
+      if (!reminderRecovery.attempted && !reminder.button.matches(':disabled, [aria-disabled="true"]') &&
+          !reminder.button.closest('[inert]')) {
+        reminderRecovery.attempted = true;
+        try { reminder.button.click(); } catch { /* Wait for confirmation or stop below. */ }
+        if (!alive || !enabled || navigating || pageAway || restoreWatchers || !reminderRecovery) return true;
+        reminder = platformReminder();
+      }
+      const box = reminderRecovery?.box;
+      if (reminder || (box?.isConnected && box.checkVisibility({ visibilityProperty: true, opacityProperty: true }))) {
+        if (Date.now() - reminderRecovery.at >= 5000) stop('平台提醒未能关闭，请手动确认后继续。', false);
+        else say('正在确认平台提示，关闭后继续播放…');
+        return true;
+      }
+    }
+    if (reminderRecovery) {
+      const recovery = reminderRecovery;
+      reminderRecovery = null;
+      const video = recovery.video;
+      if (recovery.epoch === epoch && recovery.href === w.location.href && video === activeVideo &&
+          video?.isConnected && recovery.context === videoContext(video) && video.paused && !video.ended) {
+        playTried.delete(video);
+        if (buffering?.video === video && buffering.context === recovery.context) buffering.retried = false;
+      }
+    }
+    return false;
+  }
+  function rememberMediaPauseIntent(event) {
+    const video = currentVideo();
+    const player = video?.closest('#player') || video?.parentElement;
+    if (!event.isTrusted || !enabled || !video?.isConnected ||
+        panel?.contains(event.target) || !player?.contains(event.target)) return;
+    if (video.paused) {
+      if (event.type === 'pointerdown' || [' ', 'Enter'].includes(event.key)) {
+        const control = event.target.closest('button, [role="button"], [title], [aria-label]');
+        const label = control?.getAttribute('aria-label') || control?.getAttribute('title') || text(control);
+        if (/暂停|\bpause\b/i.test(label) && !/^播放|^play\b/i.test(label)) pauseByUser('已暂停；点击“开始 / 继续”恢复。', false);
+      }
+      return;
+    }
+    if (event.type === 'keydown' && (![' ', 'k', 'K', 'MediaPlayPause'].includes(event.key) ||
+        event.target.closest('input, textarea, select, [contenteditable]'))) return;
+    mediaPauseIntent = { video, context: videoContext(video), at: Date.now() };
+  }
+  function noteBuffering(video) {
+    if (!alive || !enabled || pageAway || restoreWatchers || navigating ||
+        video !== activeVideo || !video?.isConnected || videoFinished(video)) return;
+    const context = videoContext(video);
+    if (buffering?.video !== video || buffering.context !== context) buffering = { video, context, epoch, href: w.location.href, retried: false, retryAt: 0,
+      time: video.currentTime, online: w.navigator.onLine !== false, ready: !video.error && video.readyState >= 3 };
+    else {
+      buffering.time = video.currentTime;
+      if (w.navigator.onLine === false) buffering.online = false;
+      if (video.error || video.readyState < 3) buffering.ready = false;
+    }
+    tick();
+  }
+  function onNetworkChange() {
+    if (w.navigator.onLine === false) noteBuffering(activeVideo);
+    else if (buffering) tick();
+  }
+  function handleBuffering(video) {
+    const context = videoContext(video);
+    if (buffering && (buffering.video !== video || buffering.context !== context || buffering.epoch !== epoch || buffering.href !== w.location.href || videoFinished(video))) {
+      buffering = null;
+    }
+    if (!buffering && !videoFinished(video) && w.navigator.onLine === false) { activeVideo = video; noteBuffering(video); }
+    if (!buffering) return false;
+    if (video.error && [3, 4].includes(video.error.code)) {
+      stop('视频解码失败或格式不受支持，请检查播放器后继续。', false);
+      return true;
+    }
+    const online = w.navigator.onLine !== false;
+    const ready = !video.error && video.readyState >= 3;
+    if ((online && !buffering.online) || (ready && !buffering.ready)) buffering.retried = false;
+    buffering.online = online; buffering.ready = ready;
+    if (online && ready) {
+      if (!video.paused && video.currentTime > buffering.time + 0.1) { buffering = null; return false; }
+      if (video.paused && !buffering.retried && Date.now() >= buffering.retryAt) {
+        buffering.retried = true;
+        buffering.retryAt = Date.now() + 2000;
+        playTried.delete(video);
+        bindVideo(video);
+        if (!enabled) return true;
+      }
+    }
+    say(!online ? '网络已断开，等待网络恢复后继续播放。' :
+      video.error ? '视频网络加载失败，等待播放器恢复；也可暂停后重新开始。' : '视频缓冲中，等待数据恢复后继续播放。');
+    return true;
+  }
+  function onVideoPause(video) {
+    if (!alive || !enabled || video !== currentVideo() || !video.paused || videoFinished(video) || pageAway || restoreWatchers) return;
+    const context = videoContext(video);
+    if (mediaPauseIntent?.video === video && mediaPauseIntent.context === context && Date.now() - mediaPauseIntent.at < 1000) {
+      pauseByUser('已暂停；点击“开始 / 继续”恢复。', false);
+      return;
+    }
+    if (platformReminder()) { tick(); return; }
+    if (buffering?.video === video || w.navigator.onLine === false) { noteBuffering(video); return; }
+    if (videoPauseTimer !== null) w.clearTimeout(videoPauseTimer);
+    const pauseEpoch = epoch, href = w.location.href;
+    // The platform can pause media just before inserting its reminder.
+    videoPauseTimer = w.setTimeout(() => {
+      videoPauseTimer = null;
+      if (!alive || !enabled || pauseEpoch !== epoch || href !== w.location.href ||
+          video !== activeVideo || !video.isConnected || videoContext(video) !== context || !video.paused || video.ended || pageAway || restoreWatchers) return;
+      if (platformReminder()) tick();
+      else if (buffering?.video === video || w.navigator.onLine === false) noteBuffering(video);
+      else pauseByUser('已暂停；点击“开始 / 继续”恢复。', false);
+    }, 300);
+  }
+  function bindVideo(video, allowPlay = true) {
+    const context = videoContext(video);
+    activeVideo = video;
+    video.defaultMuted = true; video.muted = true; video.volume = 0;
+    if (!bound.has(video)) {
+      const handlers = [
+        ...['waiting', 'stalled', 'error'].map(name => [name, () => noteBuffering(video)]),
+        ['canplay', () => {
+          if (buffering?.video === video && !video.paused && !video.error && w.navigator.onLine !== false) buffering = null;
+          tick();
+        }],
+        ['playing', () => { if (buffering?.video === video && !video.paused) buffering = null; tick(); }]
+      ];
+      for (const [name, handler] of handlers) video.addEventListener(name, handler);
+      bound.set(video, handlers);
+    }
+    if (allowPlay && !videoFinished(video) && video.paused && !playTried.has(video)) {
+      playTried.add(video);
+      const attemptEpoch = epoch;
+      const attempt = {};
+      playAttempts.set(video, attempt);
+      try {
+        const result = video.play();
+        result?.catch(error => {
+          if (!alive || !enabled || attemptEpoch !== epoch || playAttempts.get(video) !== attempt ||
+              video !== activeVideo || !video.isConnected || videoContext(video) !== context) return;
+          if (error?.name === 'AbortError') {
+            if (video.readyState < 3 || video.networkState === 2 || w.navigator.onLine === false) noteBuffering(video);
+            else if (video.paused) onVideoPause(video);
+          } else if (error?.name === 'NetworkError') noteBuffering(video);
+          else stop('浏览器或播放器未允许播放，请点击播放器后继续。', false);
+        });
+      } catch { stop('播放器暂未就绪，请点击播放器后继续。', false); }
+    }
+  }
+  function tick() {
+    if (!alive || busy || navigating || pageAway || frozen || restoreWatchers || !d.body) return;
+    busy = true;
+    try {
+      const kind = pageKind(w.location.href);
+      if (kind === 'video') applyUpstreamPopupSourceBlocks();
+      if (kind === 'video' && handleLoginNotice()) return;
+      const fresh = readCourses();
+      if (fresh.length && (kind === 'list' || kind === 'video')) {
+        items = fresh;
+        if (kind === 'list') { home = w.location.href; scope = cid; }
+        save();
+      }
+      if (kind === 'exam') {
+        const parsed = parseQuestions(); hints = parsed.hints; questionError = parsed.error;
+        if (examPaused) { say('考试自动化已暂停。'); return; }
+        say(!billingOrigin ? '当前域名未开放华医题库内测。' :
+          examStatusMessage || questionError || (hints.length ? `已解析 ${hints.length} 题；单选/多选已转换为原题库格式。` : '等待考试题目加载…'));
+        checkAutoExam?.(parsed);
+        return;
+      }
+      if (kind === 'result') {
+        continueAfterResult();
+        return;
+      }
+      if (kind === 'list' && (readingTabAuthorization || tokenGuide?.open)) {
+        say(readingTabAuthorization ? '正在读取本标签页的授权…' : '请验证 Token，或关闭弹窗继续学习。');
+        return;
+      }
+      if (!enabled) { say(`已识别${kind === 'list' ? '课程列表' : '视频页'}，${items.length} 个课件；点击开始。`); return; }
+      if (kind === 'list') {
+        if (fresh.length) nextCourse();
+        else if (Date.now() - startAt >= 30000) stop('课程列表未加载或结构未适配，请核对页面。', false);
+        else waiting('等待课程列表加载…', startAt, 30000);
+        return;
+      }
+      if (handlePlatformReminder()) return;
+      const id = currentId();
+      if (!id) { stop('当前地址缺少课件标识，请从课程列表重新进入。', false); return; }
+      const current = fresh.find(item => item.id === id) ||
+        items.find(item => item.id === id && item.id !== passedCourse && item.status === '待考试');
+      const examEntry = billingOrigin && id !== passedCourse ? enterAvailableExam(fresh.some(item => item.id === id && item.status === '待考试')) : '';
+      if (examEntry === 'entered') return;
+      if (current?.status === '待考试' && id !== passedCourse) {
+        if (billingOrigin) {
+          waitPendingExam(id, fresh.some(item => item.id === id && item.status === '待考试'));
+          return;
+        }
+        stop('当前课件待考试，请点击平台上的考试入口。', false);
+        return;
+      }
+      pendingExam = null;
+      if (current?.status === '已完成') {
+        activeVideo = null;
+        if (completedSince === null) completedSince = Date.now();
+        const examPending = examEntry === 'pending';
+        if (Date.now() - completedSince >= (examPending ? 45000 : 3000)) nextCourse();
+        else if (examPending) waiting('课件已完成，等待平台开放考试入口…', completedSince, 45000);
+        else say('课件已完成，正在核对是否需要考试…');
+        return;
+      }
+      completedSince = null;
+      const video = currentVideo();
+      if (!video) {
+        activeVideo = null;
+        if (Date.now() - startAt >= 30000) stop('未找到可控制的视频，请手动确认播放器加载状态。', false);
+        else waiting('等待播放器加载…', startAt, 30000);
+        return;
+      }
+      // Only the current media element is muted/started; popup-source suppression is restored on destroy.
+      if (handleBuffering(video)) return;
+      bindVideo(video);
+      if (!enabled) return;
+      if (videoFinished(video)) {
+        if (waitSince === null) waitSince = Date.now();
+        if (Date.now() - waitSince >= 45000) stop('视频已结束，但平台尚未确认完成；已暂停切课，请核对学习记录。', false);
+        else waiting('视频已结束，等待平台确认“已完成 / 待考试”…', waitSince, 45000);
+      } else { waitSince = null; say('静音播放中；完成后等待平台确认再切课。'); }
+    } finally { busy = false; syncBackgroundKeepalive(); }
+  }
+  function watch() {
+    clearWatchers();
+    timer = w.setInterval(tick, 1000);
+    observer = new w.MutationObserver(mutations => {
+      if (scheduled !== null || mutations.every(m => panel?.contains(m.target))) return;
+      scheduled = w.setTimeout(() => { scheduled = null; tick(); }, 200);
+    });
+    observer.observe(d.body, { childList: true, subtree: true, attributes: true,
+      attributeFilter: ['class', 'data-studystate', 'href', 'value', 'disabled', 'aria-disabled', 'hidden', 'inert', 'data-locked'] });
+  }
+  function start() {
+    if (!alive || pageAway || frozen) return;
+    if (loginExpired || handleLoginNotice()) return;
+    pausedByUser = false;
+    if (!requireVideoAuthorization()) return;
+    hasRun = true; pendingExam = null;
+    enabled = true; pausedByUser = false; restoreWatchers = false; recoveryVideo = null;
+    epoch++; navigating = false; waitSince = completedSince = null; startAt = Date.now();
+    for (const video of d.querySelectorAll('video')) playTried.delete(video);
+    save(); watch(); tick();
+  }
+  function boot() {
+    if (!alive || panel || !d.body) return;
+    panel = d.createElement('section');
+    panel.id = 'course-helper-dock';
+    panel.setAttribute('translate', 'no');
+    panel.setAttribute('aria-label', '课程助手控制台');
+    panel.classList.add('notranslate');
+    panel.innerHTML = huayiHelperView.dockMarkup;
+    const style = d.createElement('style'); style.textContent = huayiHelperView.dockStyle; panel.prepend(style);
+    const body = panel.querySelector('.helper-body');
+    const toggle = panel.querySelector('[data-dock-toggle]');
+    toggle.onclick = () => {
+      body.hidden = !body.hidden;
+      toggle.textContent = body.hidden ? '展开' : '收起';
+      toggle.setAttribute('aria-expanded', String(!body.hidden));
+      panel.toggleAttribute('data-collapsed', body.hidden);
+      if (!body.hidden) toggle.removeAttribute('data-notice');
+    };
+    const kind = pageKind(w.location.href);
+    statusEl = d.createElement('button');
+    statusEl.type = 'button';
+    statusEl.className = 'helper-status';
+    Object.assign(statusEl.style, kind === 'exam' ? huayiHelperView.examStatusStyle : huayiHelperView.courseStatusStyle);
+    panel.querySelector('.helper-status-slot').append(statusEl);
+    d.body.append(panel);
+    for (const event of ['click', 'change', 'input', 'keydown']) panel.addEventListener(event, e => e.stopPropagation());
+
+    const courseEntry = w.location.pathname.toLowerCase() === '/pages/course.aspx';
+    if (billingOrigin && (kind === 'exam' || kind === 'video' || courseEntry)) {
+      mountBilling(panel.querySelector('.helper-billing-slot'), kind === 'exam', kind === 'exam' || courseEntry);
+    } else {
+      panel.querySelector('.helper-payment-links').hidden = true;
+      panel.querySelector('[data-dock-license-change]').hidden = true;
+    }
+    if (billingOrigin && kind === 'exam') {
+      examSubmission = watchHuayiExamSubmission(w, () => examPaused || tokenGuide?.open);
+      statusEl.onclick = () => {
+        examPaused = !examPaused;
+        if (!examPaused) {
+          const fill = resumeExamFill;
+          resumeExamFill = null;
+          fill?.();
+          examSubmission.scheduleCheck();
+        }
+        tick();
+      };
+    } else if (kind === 'video' || kind === 'list') {
+      statusEl.onclick = () => enabled ? pauseByUser('已暂停。') : start();
+    }
+    if (kind === 'video') {
+      applyUpstreamPopupSourceBlocks();
+      scheduleUserActivity(30 * 1000 + Math.random() * 60 * 1000 + 5 * 60 * 1000 + Math.random() * 5 * 60 * 1000);
+      d.addEventListener('play', holdExpiredPlayback, true);
+      d.addEventListener('play', onVideoPlay, true);
+      d.addEventListener('pause', onMediaPause, true);
+      d.addEventListener('ended', onMediaEnded, true);
+      d.addEventListener('loadstart', onMediaLoadStart, true);
+      w.addEventListener('popstate', invalidateVideoStart);
+      d.addEventListener('pointerdown', rememberMediaPlayIntent, true);
+      d.addEventListener('keydown', rememberMediaPlayIntent, true);
+      loginObserver = new w.MutationObserver(mutations => {
+        const pending = pendingVideoStart;
+        if (pending?.video && mutations.some(mutation => [...mutation.removedNodes].some(node => node.contains(pending.video)))) pendingVideoStart = null;
+        if (!mutations.every(mutation => panel?.contains(mutation.target))) handleLoginNotice();
+      });
+      loginObserver.observe(d.body, { childList: true, subtree: true, characterData: true,
+        attributes: true, attributeFilter: ['class', 'style', 'hidden', 'role'] });
+      if (handleLoginNotice()) return;
+    }
+    if (kind === 'list') {
+      const href = w.location.href;
+      listRefreshTimer = w.setTimeout(() => {
+        listRefreshTimer = null;
+        if (!alive || pageAway || frozen || enabled || pausedByUser || navigating || w.location.href !== href ||
+            w.navigator.onLine === false || readingTabAuthorization || panel.querySelector('.helper-billing button:disabled') ||
+            d.activeElement?.matches('input, textarea, select, [contenteditable="true"]')) return;
+        const blockers = d.querySelectorAll('dialog[open], .layui-layer, .el-message-box, .el-dialog, [role="dialog"], [role="alertdialog"], input[type="password"]');
+        if ([...blockers].some(el => el.checkVisibility({ visibilityProperty: true, opacityProperty: true }))) return;
+        w.location.reload();
+      }, 5 * 60 * 1000);
+    }
+    if (kind === 'face') {
+      const href = w.location.href;
+      listRefreshTimer = w.setTimeout(() => {
+        listRefreshTimer = null;
+        if (alive && w.location.href === href) w.location.reload();
+      }, 5 * 60 * 1000);
+    }
+    if (kind === 'exam' || kind === 'result') { watch(); tick(); }
+    else if (kind === 'face') say('刷脸验证页将在 5 分钟后自动刷新。');
+    else if (enabled || (billingOrigin && kind === 'video' && currentVideo()?.paused === false && !currentVideo().ended)) start();
+    else { watch(); tick(); }
+    if (kind === 'video') {
+      d.addEventListener('pointerdown', rememberMediaPauseIntent, true);
+      d.addEventListener('keydown', rememberMediaPauseIntent, true);
+      w.addEventListener('offline', onNetworkChange);
+      w.addEventListener('online', onNetworkChange);
+    }
+  }
+  function rememberPlayingVideo() {
+    const context = videoContext(activeVideo);
+    const loading = (buffering?.video === activeVideo && buffering.context === context) ||
+      (reminderRecovery?.video === activeVideo && reminderRecovery.context === context);
+    if (enabled && activeVideo?.isConnected && (!activeVideo.paused || loading) && !activeVideo.ended) {
+      recoveryVideo = { video: activeVideo, context, href: w.location.href, loading };
+    }
+  }
+  function suspend() {
+    pageAway = true;
+    invalidateVideoStart();
+    rememberPlayingVideo();
+    restoreWatchers ||= timer !== null;
+    epoch++;
+    clearWatchers();
+    stopBackgroundKeepalive();
+  }
+  function freeze() {
+    if (pageAway || pageKind(w.location.href) === 'exam') return;
+    frozen = true;
+    if (timer === null && !pendingVideoStart) return;
+    rememberPlayingVideo();
+    restoreWatchers = true;
+    clearWatchers();
+    stopBackgroundKeepalive();
+  }
+  function scheduleRecovery(event) {
+    if (event?.type === 'resume') { frozen = false; scheduleUserActivity(); }
+    if (!alive || !panel || pageAway || frozen || navigating || pausedByUser || recoveryQueued ||
+        pageKind(w.location.href) === 'exam' || (!restoreWatchers && timer === null)) return;
+    recoveryQueued = true;
+    Promise.resolve().then(() => {
+      recoveryQueued = false;
+      if (!alive || pageAway || frozen || navigating || pausedByUser || (!restoreWatchers && timer === null)) return;
+      if (restoreWatchers) { restoreWatchers = false; watch(); }
+      finishVideoAuthorization();
+      if (d.visibilityState === 'visible' && recoveryVideo) {
+        const { video, context, href, loading } = recoveryVideo;
+        recoveryVideo = null;
+        if (enabled && href === w.location.href && video === activeVideo &&
+            video.isConnected && videoContext(video) === context && video.paused && !video.ended) {
+          if (loading) noteBuffering(video);
+          else playTried.delete(video);
+        }
+      }
+      tick();
+    });
+  }
+  function onVisibilityChange() {
+    syncBackgroundKeepalive();
+    if (d.visibilityState === 'hidden') rememberPlayingVideo();
+    else scheduleRecovery();
+  }
+  function resume(event) {
+    if (!event.persisted) return;
+    pageAway = false;
+    frozen = false;
+    scheduleUserActivity();
+    if (!alive || !panel || !restoreWatchers || pausedByUser) return;
+    if (pageKind(w.location.href) === 'exam') { restoreWatchers = false; watch(); tick(); }
+    else scheduleRecovery();
+  }
+  function destroy() {
+    alive = false; epoch++; clearWatchers(); panel?.remove();
+    restoreUpstreamPopupSourceBlocks();
+    if (listRefreshTimer !== null) w.clearTimeout(listRefreshTimer);
+    clearUserActivity();
+    loginObserver?.disconnect(); loginObserver = null;
+    d.removeEventListener('play', holdExpiredPlayback, true);
+    d.removeEventListener('play', onVideoPlay, true);
+    d.removeEventListener('pause', onMediaPause, true);
+    d.removeEventListener('ended', onMediaEnded, true);
+    d.removeEventListener('loadstart', onMediaLoadStart, true);
+    w.removeEventListener('popstate', invalidateVideoStart);
+    d.removeEventListener('pointerdown', rememberMediaPlayIntent, true);
+    d.removeEventListener('keydown', rememberMediaPlayIntent, true);
+    if (tokenGuide?.open) tokenGuide.close();
+    tokenGuide?.remove();
+    examSubmission?.stop();
+    stopBackgroundKeepalive();
+    d.removeEventListener('DOMContentLoaded', boot);
+    d.removeEventListener('pointerdown', rememberMediaPauseIntent, true);
+    d.removeEventListener('keydown', rememberMediaPauseIntent, true);
+    w.removeEventListener('offline', onNetworkChange);
+    w.removeEventListener('online', onNetworkChange);
+    d.removeEventListener('freeze', freeze);
+    d.removeEventListener('resume', scheduleRecovery);
+    d.removeEventListener('visibilitychange', onVisibilityChange);
+    w.removeEventListener('focus', scheduleRecovery);
+    w.removeEventListener('pagehide', suspend); w.removeEventListener('pageshow', resume);
+    if (guardedDocumentAddEventListener && d.addEventListener === guardedDocumentAddEventListener) {
+      try {
+        if (documentAddEventListenerDescriptor) Object.defineProperty(d, 'addEventListener', documentAddEventListenerDescriptor);
+        else delete d.addEventListener;
+      } catch {}
+    }
+    if (w.__courseHelperHuayi === api) delete w.__courseHelperHuayi;
+  }
+  const api = { destroy, stop: () => pauseByUser('已暂停。'),
+    snapshot: () => ({ platform: 'huayi_cme', page: pageKind(w.location.href), enabled,
+      courses: JSON.parse(JSON.stringify(items)), questionHints: JSON.parse(JSON.stringify(hints)), questionError }),
+    parseQuestions: () => {
+      const { hints, error } = parseQuestions();
+      return { hints, error };
+    }, readCourses, pageKind };
+  w.__courseHelperHuayi = api;
+  w.addEventListener('pagehide', suspend); w.addEventListener('pageshow', resume);
+  w.addEventListener('focus', scheduleRecovery);
+  d.addEventListener('freeze', freeze);
+  d.addEventListener('resume', scheduleRecovery);
+  d.addEventListener('visibilitychange', onVisibilityChange);
+  if (d.readyState === 'loading') d.addEventListener('DOMContentLoaded', boot, { once: true });
+  else boot();
+  return api;
+}
+
+// Native exam submission shares the pause state without calling the question bank.
+function watchHuayiExamSubmission(w, isPaused) {
+  const { document, location, sessionStorage } = w;
+  const examUrl = location.href;
+  const attemptKey = `huayi-completed-submit:${location.pathname}${location.search}`;
+  const questionSelector = 'input[type="radio"], input[type="checkbox"]';
+  const visibilityOptions = { visibilityProperty: true, opacityProperty: true };
+  let scheduled, attemptedHere = false;
+
+  function allQuestionsAnswered(form) {
+    const answers = new Map();
+    const questionTables = new Set([...form.querySelectorAll('table.tablestyle')]
+      .filter(table => table.checkVisibility(visibilityOptions)));
+    for (const control of form.elements) {
+      if (!control.matches(questionSelector) || !control.checkVisibility(visibilityOptions)) continue;
+
+      const table = control.closest('table.tablestyle');
+      questionTables.delete(table);
+      const group = control.type === 'radio' ? control.name : control.closest('[data-question-id]') || table;
+      if (!group) return false;
+
+      const answered = control.checked && !control.matches(':disabled');
+      answers.set(group, answers.get(group) || answered);
+    }
+    return questionTables.size === 0 && answers.size > 0 && Array.from(answers.values()).every(Boolean);
+  }
+
+  function findSubmitConfirmation() {
+    const dialogs = document.querySelectorAll('.layui-layer, .el-message-box, dialog[open], [role="dialog"], [role="alertdialog"]');
+    for (const dialog of dialogs) {
+      if (!dialog.checkVisibility(visibilityOptions)) continue;
+      const message = dialog.querySelector('.layui-layer-content, .el-message-box__message, p');
+      const prompt = (message?.textContent || '').replace(/\s+/g, '').replace(/[？?。！!]$/, '');
+      if (!/^(?:请确认是否交卷|是否交卷|(?:请|您)?(?:确认|确定)(?:要)?(?:交卷|提交(?:本次|当前)?试卷)(?:吗)?)$/.test(prompt)) continue;
+
+      const button = [...dialog.querySelectorAll('button, [role="button"], a.layui-layer-btn0')].find(el =>
+        /^(确认|确定|确认交卷|确定交卷)$/.test(el.textContent.trim()) &&
+        !el.closest(':disabled, [aria-disabled="true"], [inert]') && el.checkVisibility(visibilityOptions));
+      if (button) return button;
+    }
+    return null;
+  }
+
+  function submitIfComplete() {
+    if (location.href !== examUrl || isPaused()) return;
+    if (attemptedHere) {
+      const confirmation = findSubmitConfirmation();
+      if (confirmation) {
+        stop();
+        confirmation.click();
+      }
+      return;
+    }
+    if (sessionStorage.getItem(attemptKey) || findSubmitConfirmation()) return;
+
+    const button = document.querySelector(
+      'input[type="image"][name="btn_submit"], ' +
+      'input[type="submit"][name="btn_submit"], ' +
+      'button[name="btn_submit"]'
+    );
+    if (!button?.form || button.type === 'reset' || button.closest(':disabled, [aria-disabled="true"], [inert]') ||
+        !button.checkVisibility(visibilityOptions) || w.getComputedStyle(button).pointerEvents === 'none' ||
+        !allQuestionsAnswered(button.form)) return;
+
+    sessionStorage.setItem(attemptKey, '1');
+    attemptedHere = true;
+    button.click();
+  }
+
+  function scheduleCheck() {
+    w.clearTimeout(scheduled);
+    scheduled = w.setTimeout(submitIfComplete, 500);
+  }
+
+  function onChange(event) {
+    if (event.target instanceof w.HTMLInputElement && event.target.matches(questionSelector)) scheduleCheck();
+  }
+
+  function stop() {
+    w.clearTimeout(scheduled);
+    observer.disconnect();
+    document.removeEventListener('change', onChange, true);
+  }
+
+  const observer = new w.MutationObserver(records => {
+    if (records.some(({ target }) => !target.closest('#course-helper-dock, #course-helper-license-guide'))) scheduleCheck();
+  });
+  if (!sessionStorage.getItem(attemptKey)) {
+    document.addEventListener('change', onChange, true);
+    observer.observe(document.body, { subtree: true, childList: true, attributes: true,
+      attributeFilter: ['class', 'style', 'hidden', 'checked', 'disabled', 'aria-disabled', 'inert', 'open'] });
+    scheduleCheck();
+  }
+  return { scheduleCheck, stop };
+}
+// HUAYI ADAPTER END
+
   const VIDEO_MARK = 'data-course-helper-ready';
   const API_PATH = '/xxpt/api/exam/getCoursesExamList';
-  const SCRIPT_VERSION = '5.5.56.1017';
+  const SCRIPT_VERSION = '5.5.56.1063';
   // BILLING CORE START — independent of DOM; transport and billing contract unchanged.
   function createBillingClient(fetcher, uuid, now = Date.now) {
     let busy = false;
@@ -273,9 +2272,14 @@
     }
   }
   const queryJournal = new QueryJournal(() => window.sessionStorage);
+  // HUAYI DISPATCH START
+  if (/(^|\.)91huayi\.com$/i.test(window.location.hostname)) {
+    startHuayiAdapter(window, parseExamQuestionHints, createBillingClient, QueryJournal, validLicenseFormat);
+    return;
+  }
+  // HUAYI DISPATCH END
   const paidAnswerMemory = new Map();
   let receiptView = { key: null, rows: [], nextCursor: null, busy: false, nextReadAt: 0, message: '' };
-  let billingLastDetail = '';
   let latestSafeError = null;
   async function billingIdentity(candidate, license) {
     const digest = async value => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))))
@@ -307,7 +2311,6 @@
     if (receiptView.key !== licenseState.key) {
       receiptView = { key: licenseState.key, rows: [], nextCursor: null, busy: false, nextReadAt: 0, message: '' };
       list.replaceChildren();
-      billingLastDetail = '';
       billingPanel.querySelector('[data-billing-detail]').textContent = '';
       billingPanel.querySelector('[data-billing-status]').textContent = isExamPage() ? '等待本场查询。' : '等待进入考试。';
     }
@@ -412,7 +2415,8 @@
       this.generation++;
       this.reset();
       try {
-        const raw = this.options.storage().getItem(this.storageKey);
+        const shared = this.options.shared?.read();
+        const raw = shared === undefined ? this.options.storage().getItem(this.storageKey) : shared && JSON.stringify(shared);
         if (!raw) return false;
         const data = JSON.parse(raw);
         if (data?.version !== 1 || !validLicenseFormat(data.licenseKey) ||
@@ -427,7 +2431,15 @@
         return false;
       }
     }
-    save() {
+    save(mode = 'balance') {
+      if (this.options.shared) {
+        const shared = this.options.shared.read();
+        if (mode !== 'bind' && shared !== undefined && shared?.licenseKey !== this.state.key) return true;
+        if (this.options.shared.save(this.state.key, this.state.remaining, this.lastVerifyTime, mode)) {
+          try { this.options.storage().removeItem(this.storageKey); } catch {}
+          return true;
+        }
+      }
       try {
         this.options.storage().setItem(this.storageKey, JSON.stringify({ version: 1, licenseKey: this.state.key,
           remaining: this.state.remaining, status: this.state.status, lastVerifyTime: this.lastVerifyTime }));
@@ -438,6 +2450,7 @@
       }
     }
     clear() {
+      this.options.shared?.clear(this.state.key);
       this.generation++;
       this.reset();
       this.message = '';
@@ -450,10 +2463,11 @@
         INSUFFICIENT_BALANCE: '授权次数不足，请充值。', RATE_LIMITED: '操作过于频繁，请稍后重试。',
         CLIENT_BUSY: '当前请求正在处理中，请稍后重试。' })[code] || '服务器连接失败，请稍后重试。';
     }
-    handleError(error) {
+    handleError(error, key = this.state.key) {
       const code = error?.message;
       this.message = this.errorMessage(code);
       if (code === 'INVALID_LICENSE' || code === 'LICENSE_DISABLED') {
+        this.options.shared?.clear(key);
         this.state.verified = false;
         this.state.status = code === 'LICENSE_DISABLED' ? 'disabled' : 'invalid';
         try { this.options.storage().removeItem(this.storageKey); } catch {}
@@ -462,7 +2476,7 @@
       }
       this.notify();
     }
-    async verify(value) {
+    async verify(value, mode = 'bind') {
       if (this.busy) return false;
       const key = String(value || '').trim();
       if (!validLicenseFormat(key)) { this.message = LICENSE_FORMAT_MESSAGE; this.notify(); return false; }
@@ -478,20 +2492,28 @@
         this.guidePending = false;
         this.lastVerifyTime = Date.now();
         this.message = data.remaining === 0 ? '授权次数不足，请充值。' : '';
-        this.save();
+        this.save(mode);
         this.options.onVerified?.();
         return true;
       } catch (error) {
-        if (generation === this.generation) this.handleError(error);
+        if (generation === this.generation) this.handleError(error, key);
         return false;
       } finally {
         this.busy = false;
         this.notify();
       }
     }
+    syncSharedBinding() {
+      const shared = this.options.shared?.read();
+      if (shared !== undefined && (shared?.licenseKey ?? null) !== this.state.key) {
+        this.load();
+        this.notify();
+      }
+    }
     refreshBalance() {
+      if (!this.busy) this.syncSharedBinding();
       if (!this.state.key) { this.options.open?.(); return Promise.resolve(false); }
-      return this.verify(this.state.key);
+      return this.verify(this.state.key, 'migrate');
     }
     init() {
       if (this.initialized) return;
@@ -510,6 +2532,7 @@
     }
     checkLicenseStatus() {
       if (this.busy) { this.message = '正在验证 Token，请稍后查题。'; this.notify(); return false; }
+      this.syncSharedBinding();
       if (this.state.key && !validLicenseFormat(this.state.key)) {
         this.clear();
         this.message = LICENSE_FORMAT_MESSAGE;
@@ -552,6 +2575,7 @@
   }
   const licenseManager = new LicenseManager(licenseState, {
     storage: () => window.localStorage,
+    shared: createSharedLicenseStore(validLicenseFormat),
     balance: key => getBillingClient().balance(key),
     onChange: () => renderLicenseUI(),
     onVerified: () => closeLicenseGuide(),
@@ -578,6 +2602,12 @@
     });
     const busy = licenseManager.busy || billingBusy;
     billingPanel?.querySelectorAll('button, input').forEach(button => { if (button.disabled !== busy) button.disabled = busy; });
+    const dockChange = helperDock?.querySelector('[data-dock-license-change]');
+    if (dockChange) dockChange.disabled = busy;
+    for (const root of [helperDock, licenseDialog]) {
+      const acquire = root?.querySelector('[data-token-service="new"]');
+      if (acquire) acquire.hidden = authorized;
+    }
     const dialogMessage = licenseDialog?.querySelector('[data-license-feedback]');
     if (dialogMessage && dialogMessage.textContent !== licenseManager.message) dialogMessage.textContent = licenseManager.message;
     licenseDialog?.querySelectorAll('input, [data-license-verify]').forEach(el => { if (el.disabled !== busy) el.disabled = busy; });
@@ -790,15 +2820,18 @@
       #course-helper-dock .helper-payment-links a { display:flex;align-items:center;justify-content:center;flex:1;min-width:0;min-height:42px;padding:9px 4px;border:1px solid #2759db;border-radius:8px;color:#fff;background:#2759db;box-shadow:0 2px 6px #2759db26;text-align:center;text-decoration:none;font-size:12px;font-weight:700;white-space:nowrap; }
       #course-helper-dock .helper-payment-links a:hover { background:#1f49bc;box-shadow:0 3px 8px #2759db38; }
       #course-helper-dock .helper-payment-links a:focus-visible { outline:2px solid #4f7cff;outline-offset:2px; }
+      #course-helper-dock .helper-payment-links [hidden], #course-helper-license-guide .guide-payment-links [hidden] { display:none!important; }
+      #course-helper-dock [data-dock-license-change] { margin:0 9px 8px;padding:4px 7px;border:1px solid #dfe7f2;border-radius:8px;background:#eef3fb;color:#425b7c;font-size:11px; }
     `;
     helperDock = document.createElement('section');
     helperDock.id = 'course-helper-dock';
     helperDock.setAttribute('translate', 'no');
     helperDock.classList.add('notranslate');
     helperDock.setAttribute('aria-label', '课程助手控制台');
-    helperDock.innerHTML = '<header class="helper-head"><span class="helper-title">学习助手</span><button type="button" data-dock-toggle aria-expanded="true" aria-controls="course-helper-body">收起</button></header><div class="helper-status-slot"></div>'+tokenServiceLinks('helper-payment-links')+'<div id="course-helper-body" class="helper-body"><div class="helper-billing-slot"></div></div>';
+    helperDock.innerHTML = '<header class="helper-head"><span class="helper-title">学习助手</span><button type="button" data-dock-toggle aria-expanded="true" aria-controls="course-helper-body">收起</button></header><div class="helper-status-slot"></div>'+tokenServiceLinks('helper-payment-links')+'<button type="button" data-dock-license-change>更换 Token</button><div id="course-helper-body" class="helper-body"><div class="helper-billing-slot"></div></div>';
     helperDock.prepend(style);
     bindTokenServiceLinks(helperDock);
+    helperDock.querySelector('[data-dock-license-change]').onclick = changeLicense;
     const toggle = helperDock.querySelector('[data-dock-toggle]');
     toggle.onclick = () => {
       const body = helperDock.querySelector('.helper-body');
@@ -821,7 +2854,6 @@
   }
 
   function billingMessage(message) {
-    billingLastDetail = message;
     const output = billingPanel?.querySelector('[data-billing-status]');
     const detail = billingPanel?.querySelector('[data-billing-detail]');
     if (detail) detail.textContent = message;
@@ -846,13 +2878,12 @@
     if (billingPanel) { syncBillingPageVisibility(); licenseManager.maybeShowGuide(); maybeAutoQuery(); return; }
     billingPanel = document.createElement('div');
     billingPanel.style.cssText = 'position:fixed;left:12px;top:70px;z-index:2147483647;background:white;color:#222;padding:12px;border:1px solid #bbb;border-radius:8px;width:270px;font:13px/1.6 sans-serif;max-height:70vh;overflow:auto';
-    billingPanel.innerHTML = '<div>授权状态：<strong data-license-state>未授权</strong></div><div>剩余次数：<strong data-license-remaining>—</strong></div><div data-license-note style="font-size:11px;color:#a36020"></div><div>Token：<span data-license-mask>未设置</span></div><div><button type="button" data-balance>刷新余额</button><button type="button" data-license-change>更换Token</button></div><div data-billing-status style="white-space:pre-wrap;overflow-wrap:anywhere">等待进入考试。</div><details class="helper-advanced" data-exam-retry hidden><summary>重试与说明</summary><div><button type="button" data-retry>原请求重试</button><button type="button" data-new>新建收费请求</button></div><small>一道有效答案扣1次。答案不足时暂停，不自动重试。重试缓存丢失可能再次收费；新请求可能重复购买。</small></details><details class="helper-advanced" data-general-details><summary>查询记录与详情</summary><div><button type="button" data-receipt-refresh>核对账务 / 刷新记录</button><button type="button" data-receipt-more hidden>更早记录</button></div><small data-receipt-note></small><div data-receipt-list></div><div data-billing-detail style="white-space:pre-wrap;overflow-wrap:anywhere"></div><div><span>v5.5.56</span><button type="button" data-export-diagnostic>导出脱敏诊断</button></div></details>';
+    billingPanel.innerHTML = '<div>授权状态：<strong data-license-state>未授权</strong></div><div>剩余次数：<strong data-license-remaining>—</strong></div><div data-license-note style="font-size:11px;color:#a36020"></div><div>Token：<span data-license-mask>未设置</span></div><div><button type="button" data-balance>刷新余额</button></div><div data-billing-status style="white-space:pre-wrap;overflow-wrap:anywhere">等待进入考试。</div><details class="helper-advanced" data-exam-retry hidden><summary>重试与说明</summary><div><button type="button" data-retry>原请求重试</button><button type="button" data-new>新建收费请求</button></div><small>一道有效答案扣1次。答案不足时暂停，不自动重试。重试缓存丢失可能再次收费；新请求可能重复购买。</small></details><details class="helper-advanced" data-general-details><summary>查询记录与详情</summary><div><button type="button" data-receipt-refresh>核对账务 / 刷新记录</button><button type="button" data-receipt-more hidden>更早记录</button></div><small data-receipt-note></small><div data-receipt-list></div><div data-billing-detail style="white-space:pre-wrap;overflow-wrap:anywhere"></div><div><span>v5.5.56</span><button type="button" data-export-diagnostic>导出脱敏诊断</button></div></details>';
     // Isolate helper controls from the site's delegated exam input handlers.
     for (const name of ['click', 'input', 'change', 'keydown']) billingPanel.addEventListener(name, event => event.stopPropagation());
     billingPanel.querySelector('[data-balance]').onclick = () => runBillingAction('balance');
     billingPanel.querySelector('[data-retry]').onclick = () => runBillingAction('retry');
     billingPanel.querySelector('[data-new]').onclick = () => runBillingAction('new');
-    billingPanel.querySelector('[data-license-change]').onclick = changeLicense;
     mountHelperControl(billingPanel, '.helper-billing-slot', 'helper-billing');
     const autoNotice = document.createElement('small');
     autoNotice.textContent = '进入考试自动查题，一题扣1次。刷新或重新进入可能再次扣费。';
@@ -1103,7 +3134,6 @@
   const examStartDialogStates = new WeakMap();
   let examSubmitConfirmedButtons = new WeakSet();
   const examInputAttempts = new WeakMap();
-  const examAnswerPlans = new WeakMap();
   const examXHRObserved = new WeakSet();
   let lastAdvanceAt = 0;
   let activeExamRoute = '';
@@ -4147,7 +6177,8 @@
       video.isConnected && currentVideo === video;
     const stopStalePlayback = () => {
       // 新请求或新媒体代次已接管时，不让旧回调暂停新播放。
-      if (sameMedia() && (state.lastAttempt === token || manualPaused || backgroundPageHidden || anomalyDiagnostic.guardActive || isExamPage()) && !video.paused && !video.ended) {
+      if (((sameMedia() && (state.lastAttempt === token || manualPaused || backgroundPageHidden || anomalyDiagnostic.guardActive || isExamPage())) ||
+          (video === currentVideo && manualPaused)) && !video.paused && !video.ended) {
         try { video.pause(); } catch (_) {}
       }
     };
@@ -4235,6 +6266,10 @@
     return promise;
   }
 
+  for (const type of ['offline', 'online']) {
+    window.addEventListener(type, () => { if (courseVideoLoad) handleCourseVideoLoad(); });
+  }
+
   // 捕获新video的就绪事件，即使轮询尚未绑定该节点，也能及时启动本节。
   for (const type of ['loadedmetadata', 'loadeddata', 'canplay']) {
     document.addEventListener(type, event => {
@@ -4278,6 +6313,24 @@
       load.audioFailed = false;
       load.playToken = (load.playToken || 0) + 1;
     }
+    const online = navigator.onLine !== false;
+    const recovered = online && (load.wasOffline === true || (mediaReady && load.mediaWasReady === false));
+    if (online && load.wasOffline) load.retryAt = now + COURSE_LOAD_TIMEOUT;
+    load.wasOffline = !online;
+    load.mediaWasReady = mediaReady;
+    if (!online) {
+      load.retryAt = now + COURSE_LOAD_TIMEOUT;
+      showCourseVideoLoadStatus();
+      return true;
+    }
+    if (recovered && !load.playPending &&
+        ['AbortError', 'NetworkError', 'CoursePlayTimeoutError'].includes(load.lastPlayErrorName)) {
+      load.exhausted = false;
+      load.playExhausted = false;
+      load.playAttempts = 0;
+      load.lastPlayErrorName = null;
+      recordPlaybackDiagnostic('本节网络或数据恢复，重新允许有限播放重试', video);
+    }
     if (load.playPending && now - load.lastPlayAt >= COURSE_LOAD_TIMEOUT) {
       load.playPending = false;
       load.playToken = (load.playToken || 0) + 1;
@@ -4306,7 +6359,7 @@
         if (courseVideoLoad === load && load.generation === generation && load.playToken === playToken) {
           load.audioWaiting = false;
           load.audioFailed = error?.name === 'CourseAudioNotReadyError';
-          load.lastPlayErrorName = error?.name === 'NotAllowedError' ? 'NotAllowedError' : 'Other';
+          load.lastPlayErrorName = String(error?.name || 'Other');
           // 音量同步有5秒失败限频，重试须错开该窗口，避免2秒轮询耗尽次数。
           if (load.audioFailed) load.lastPlayAt = Date.now() + 3000;
           recordPlaybackDiagnostic('本节加载播放失败', video, { error: String(error), errorName: error?.name, playAttempts: load.playAttempts });
