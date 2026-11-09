@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         医学类继续教育学习平台[AI答题][一键启动][最小化运行]
+// @name         医学类继续教育学习平台(已支持华医网,河南省医学河南省继续医学教育 学习平台)[AI答题][一键启动][最小化运行]
 // @namespace    my-study-site-controlled-payment-acceptance
 // @version      5.5.56.1063
 // @updateURL    https://api.axetk.icu/payment-test/portal/acceptance-helper.user.js
