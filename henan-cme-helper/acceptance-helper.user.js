@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         医学类继续教育学习平台(已支持华医网,河南省继续医学教育学习平台)[AI答题][一键启动][最小化运行]
 // @namespace    my-study-site-controlled-payment-acceptance
-// @version      5.5.56.1073
+// @version      5.5.56.1079
 // @updateURL    https://api.axetk.icu/payment-test/portal/acceptance-helper.user.js
 // @downloadURL  https://api.axetk.icu/payment-test/portal/acceptance-helper.user.js
 // @description  当前支持华医网，河南省继续医学教育学习平台，视频+考试，脚本一键启动、全自动运行、可最小化运行不会中断；不占网速、不费流量，开热点也能用
 // @author  清风徐来
 // @match        https://yuancheng.henanyixue.com/*
+// @match        *://*.jumingedu.com/*
 // @match        *://*.91huayi.com/pages/course.aspx*
 // @match        *://*.91huayi.com/pages/cme.aspx*
 // @match        *://*.91huayi.com/pages/face.aspx*
@@ -20,6 +21,8 @@
 // @grant        GM_saveTab
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM_xmlhttpRequest
+// @connect      api.axetk.icu
 // @sandbox      raw
 // @icon         data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAACL0lEQVR4AexVPUtDQRDcd/BqP36AhQg2YiXYWCqo2NpYK0LEWKnpxC7RSkVBtLaxFRW0tBGs1EYQC3+AH62BxJmLG44zCfeSGBUiN7m3e7sz475wMeL8da2mezqW07mOlfQd8AEUmwRy3ZGbGo6klA3gcLZQlEeJZAUFA0AMNGuRa4Dc1KCWElsDNhHJAZIsxPajK4aRA6sJGWNHEskenlu7oEltUyjIApRjINHKjI6Li0TNpeKY2gbjmCzFyT4zYxPiIln3V3UkkwaP/cBvrX4aSDz+JrqNaSCIj+/7LbclCr9J89xZ659Xi4MNVCNoNN82EDyB7OW5dK4uleGP3j1jrX9eLQ42UI2g0fz/NZC9OBMX9U6i7gnwPbtouYF6Bf2+ihPgTXYyv2hvvdvMmij2pmdkpLfP5yjHPV3dor3s4a3InVzsLRc6D5UN4JdOhUiqmBkaFpKRVM/JxXPN8xeSZ8zpGWP2MvZR0YBf5Mckp6DmfUOaD9nrMhBCHFrTNvAnJpD339fz64tcPT3am+7o5loIxn5dpVh72cObknuN3jwn8OATDWbXZWp/R3jTpY6PhGCseZL6PRRxa9ij/czz19LvQfxgpCineAha+t+RnGa0iQIETWguaIe2MUZ2UfztNSBXc9GMFiQWLjXmqW1ec9vPmEKqlGvhZ1FS1OZ3QN43tw9hYg7yiSeBnqQrTy2riU5rALs1YSLpw+EG4nugKWbAw0Wue3JTQ8V58AkAAP//QnN1AQAAAAZJREFUAwA3IhTYRvG0SwAAAABJRU5ErkJggg==
 // @antifeature payment  脚本会请求第三方收费题库进行答题，您可以选择付费或停用答题功能
@@ -114,9 +117,9 @@ function tokenBalanceTransport(fetcher) {
   };
 }
 
-function startHuayiAdapter(w, parseHints, createBillingClient, QueryJournal, validLicenseFormat) {
+function startHuayiAdapter(w, parseHints, createBillingClient, QueryJournal, validLicenseFormat, billingFetch) {
   const d = w.document;
-  const huayiHelperView = {"version":"5.5.56.1073","courseStatusStyle":{"position":"fixed","right":"22px","top":"50%","transform":"translateY(-50%)","zIndex":"2147483647","minWidth":"205px","maxWidth":"360px","padding":"14px 16px","border":"0","borderRadius":"10px","color":"#fff","fontSize":"15px","lineHeight":"1.5","fontWeight":"600","whiteSpace":"normal","boxShadow":"0 5px 18px rgba(0,0,0,.25)","cursor":"pointer"},"examStatusStyle":{"position":"fixed","right":"18px","bottom":"18px","zIndex":"2147483647","padding":"10px 14px","color":"#fff","background":"#1677ff","borderRadius":"8px","fontSize":"14px","lineHeight":"1.5","boxShadow":"0 4px 14px rgba(0,0,0,.25)"},"dockStyle":"\n      #course-helper-dock { position:fixed;right:16px;top:72px;width:300px;max-width:calc(100vw - 24px);z-index:2147483647;color:#24334b;background:#f8fafc;border:1px solid #dce4ee;border-radius:18px;box-shadow:0 12px 40px #172b4d24;font:13px/1.6 system-ui,\"Microsoft YaHei\",sans-serif;overflow:hidden;text-align:left;color-scheme:light; }\n      #course-helper-dock, #course-helper-dock * { box-sizing:border-box; }\n      #course-helper-dock[hidden] { display:none!important; }\n      #course-helper-dock .helper-head { display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#fff;border-bottom:1px solid #e8edf4; }\n      #course-helper-dock .helper-title { font-size:15px;font-weight:750;color:#14253f; }\n      #course-helper-dock .helper-subtitle { font-size:11px;color:#77869b;letter-spacing:.5px; }\n      #course-helper-dock button { font:inherit;cursor:pointer;transition:filter .15s; }\n      #course-helper-dock button:hover { filter:brightness(.95); }\n      #course-helper-dock button:focus-visible, #course-helper-dock input:focus-visible, #course-helper-dock summary:focus-visible { outline:2px solid #4f7cff;outline-offset:2px; }\n      #course-helper-dock [data-dock-toggle] { padding:5px 10px;background:#eef3fb;color:#466080;border:0;border-radius:8px;font-size:12px; }\n      #course-helper-dock .helper-body { padding:12px;max-height:calc(100dvh - 230px);overflow:auto;overscroll-behavior:contain; }\n      #course-helper-dock .helper-body[hidden] { display:none; }\n      #course-helper-dock .helper-status-slot:empty { display:none; }\n      #course-helper-dock .helper-status-slot:not(:empty)::before { content:'运行状态';display:block;font-size:11px;font-weight:650;color:#75839a;margin:0 0 7px 2px; }\n      #course-helper-dock .helper-status { position:static!important;transform:none!important;min-width:0!important;max-width:none!important;width:100%!important;margin:0 0 10px!important;padding:11px 13px!important;box-shadow:none!important;border:0!important;border-radius:10px!important;font-size:12px!important;line-height:1.7!important;white-space:pre-wrap!important;text-align:left!important;overflow-wrap:anywhere; }\n      #course-helper-dock .helper-pause-slot { padding:0 12px 12px;background:#f8fafc; }\n      #course-helper-dock .helper-pause-slot:empty { display:none; }\n      #course-helper-dock .helper-pause { position:static!important;min-width:0!important;width:100%!important;padding:10px 12px!important;border-radius:10px!important;font-size:13px!important;box-shadow:none!important; }\n      #course-helper-dock .helper-billing { position:static!important;width:auto!important;max-height:none!important;overflow:visible!important;background:#fff!important;color:#24334b!important;padding:12px!important;border:1px solid #e3eaf3!important;border-radius:12px!important;font:inherit!important; }\n      #course-helper-dock .helper-billing summary { cursor:pointer;font-weight:700;color:#264772;margin-bottom:10px; }\n      #course-helper-dock .helper-billing label { display:block;font-size:12px;color:#697a92; }\n      #course-helper-dock .helper-billing input { display:block;width:100%!important;margin:5px 0 10px;padding:9px 10px;background:#f8fafc;border:1px solid #dce4ef;border-radius:8px;color:#172b4d;font:inherit; }\n      #course-helper-dock .helper-billing div:has(>button) { display:flex;gap:7px;margin:7px 0; }\n      #course-helper-dock .helper-billing button { flex:1;padding:8px 5px;border:1px solid #dfe7f2;border-radius:8px;background:#f5f8fd;color:#425b7c;font-size:12px; }\n      #course-helper-dock [data-license-inline][hidden] { display:none!important; }\n      #course-helper-dock [data-exam-retry][hidden] { display:none!important; }\n      #course-helper-dock [data-receipt-more][hidden] { display:none!important; }\n      #course-helper-dock .helper-receipt { border-bottom:1px solid #edf0f5;padding:8px 0;font-size:11px;white-space:pre-wrap;overflow-wrap:anywhere; }\n      #course-helper-dock [data-receipt-list] { max-height:210px;overflow:auto; }\n      #course-helper-dock [data-billing-detail] { font-size:11px;color:#66758a;margin-top:8px; }\n      #course-helper-dock .helper-billing [data-new] { color:#a66825; }\n      #course-helper-dock .helper-billing button:disabled { opacity:.45;cursor:wait; }\n      #course-helper-dock small { display:block;color:#8995a8;font-size:11px;line-height:1.65;margin-top:10px; }\n      #course-helper-dock [data-billing-status] { background:#f0f5ff;border-radius:8px;padding:10px;margin-top:10px;font-size:12px;color:#416087;line-height:1.7; }\n      @media(max-width:600px) { #course-helper-dock { right:8px;top:12px;width:280px; } #course-helper-dock .helper-body { max-height:calc(100dvh - 160px); } }\n      /* Compact edition: open by default, manual collapse stays respected. */\n      #course-helper-dock { top:auto;bottom:16px;right:12px;width:260px;border-radius:12px;box-shadow:0 4px 18px #172b4d1a; }\n      #course-helper-dock[data-collapsed] { width:180px; }\n      #course-helper-dock .helper-head { padding:7px 9px;gap:7px;min-height:42px;border-bottom:0; }\n      #course-helper-dock .helper-title { font-size:12px;font-weight:650;white-space:nowrap; }\n      #course-helper-dock [data-dock-toggle] { padding:4px 7px;white-space:nowrap;font-size:11px; }\n      #course-helper-dock [data-dock-toggle][data-notice]::after { content:'';display:inline-block;width:5px;height:5px;background:#315fee;border-radius:50%;margin-left:3px;vertical-align:middle; }\n      #course-helper-dock .helper-pause-slot { padding:0;background:none;margin-left:auto; }\n      #course-helper-dock .helper-pause { padding:4px 8px!important;font-size:11px!important;border-radius:6px!important;white-space:nowrap;line-height:1.6!important;font-weight:500!important; }\n      #course-helper-dock .helper-body { padding:0 9px 9px;max-height:min(360px,calc(100dvh - 224px)); }\n      #course-helper-dock .helper-status-slot:not(:empty)::before { display:none; }\n      #course-helper-dock .helper-status { margin:0 0 7px!important;padding:7px 9px!important;font-size:11px!important;line-height:1.5!important;border-radius:7px!important;max-height:100px;overflow:auto; }\n      #course-helper-dock .helper-billing { padding:9px!important;border-radius:8px!important; }\n      #course-helper-dock .helper-billing summary { margin-bottom:6px;font-size:12px; }\n      #course-helper-dock .helper-billing input { padding:6px 8px;margin:4px 0 7px; }\n      #course-helper-dock .helper-billing button { padding:6px 4px; }\n      #course-helper-dock .helper-advanced { margin-top:7px;border-top:1px solid #edf0f5;padding-top:5px; }\n      #course-helper-dock .helper-advanced summary { color:#8995a8;font-size:11px;font-weight:400;margin:0; }\n      #course-helper-dock [data-billing-status] { background:transparent;padding:0;margin-top:7px;font-size:11px;max-height:110px;overflow:auto; }\n      #course-helper-dock small { margin-top:6px; }\n      @media(max-width:600px) { #course-helper-dock { right:8px;bottom:8px;top:auto; } }\n      #course-helper-dock > .helper-status-slot:not(:empty) { padding:0 9px 7px; }\n      #course-helper-dock .helper-status { cursor:pointer!important;margin-bottom:0!important; }\n      #course-helper-dock .helper-status::after { content:attr(data-action);display:block;font-size:10px;opacity:.8;margin-top:3px; }\n      #course-helper-dock .helper-payment-links { display:flex;gap:8px;margin:5px 9px 9px;padding:8px 0 0;border-top:1px solid #dce5f5; }\n      #course-helper-dock .helper-payment-links a { display:flex;align-items:center;justify-content:center;flex:1;min-width:0;min-height:42px;padding:9px 4px;border:1px solid #2759db;border-radius:8px;color:#fff;background:#2759db;box-shadow:0 2px 6px #2759db26;text-align:center;text-decoration:none;font-size:12px;font-weight:700;white-space:nowrap; }\n      #course-helper-dock .helper-payment-links a:hover { background:#1f49bc;box-shadow:0 3px 8px #2759db38; }\n      #course-helper-dock .helper-payment-links a:focus-visible { outline:2px solid #4f7cff;outline-offset:2px; }\n      #course-helper-dock .helper-payment-links [hidden], #course-helper-license-guide .guide-payment-links [hidden] { display:none!important; }\n      #course-helper-dock [data-dock-license-change] { margin:0 9px 8px;padding:4px 7px;border:1px solid #dfe7f2;border-radius:8px;background:#eef3fb;color:#425b7c;font-size:11px; }\n    ","dockMarkup":"<header class=\"helper-head\"><span class=\"helper-title\">学习助手</span><button type=\"button\" data-dock-toggle aria-expanded=\"true\" aria-controls=\"course-helper-body\">收起</button></header><div class=\"helper-status-slot\"></div><nav class=\"helper-payment-links\" aria-label=\"Token 服务\"><a data-token-service=\"new\" href=\"https://api.axetk.icu/payment-test/portal/#new\" target=\"_blank\" rel=\"noopener noreferrer\">获取 Token</a><a data-token-service=\"topup\" href=\"https://api.axetk.icu/payment-test/portal/#topup\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"自动填入当前 Token，付款前请核对\">Token 充值</a></nav><button type=\"button\" data-dock-license-change>更换 Token</button><div id=\"course-helper-body\" class=\"helper-body\"><div class=\"helper-billing-slot\"></div></div>","guideMarkup":"\n      <style>\n        #course-helper-license-guide { position:fixed;left:50%;top:50%;margin:0;transform:translate(-50%,-50%);width:360px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px);overflow:auto;overscroll-behavior:contain;box-sizing:border-box;z-index:2147483647;padding:28px;background:#fff;color:#1e293b;border:1px solid #e2e8f0;border-radius:20px;box-shadow:0 24px 80px #0f172a29;font:14px/1.65 \"Microsoft YaHei\",\"PingFang SC\",system-ui,sans-serif;text-align:left;letter-spacing:0;color-scheme:light; }\n        #course-helper-license-guide::backdrop { background:#0f172a66;overflow:hidden;overscroll-behavior:contain;touch-action:none; }\n        #course-helper-license-guide * { box-sizing:border-box; }\n        #course-helper-license-guide .guide-eyebrow { margin:0 32px 6px 0;color:#64748b;font-size:12px;font-weight:500; }\n        #course-helper-license-guide h3 { margin:0 0 6px;color:#0f172a;font-size:28px;font-weight:700;line-height:1.3;letter-spacing:-.5px; }\n        #course-helper-license-guide p { margin:0;color:#64748b;font-size:12px;line-height:1.8; }\n        #course-helper-license-guide .guide-benefits { display:flex;flex-wrap:wrap;gap:4px 12px;margin:16px 0 22px;padding-bottom:18px;border-bottom:1px solid #eef2f6;color:#64748b;font-size:11px; }\n        #course-helper-license-guide form { margin:0; }\n        #course-helper-license-guide label { display:block;color:#1e293b;font-size:13px;font-weight:600; }\n        #course-helper-license-guide input { display:block;width:100%;min-width:0;height:48px;margin:8px 0 6px;padding:0 12px;border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc;color:#1e293b;font:14px/1.5 \"Microsoft YaHei\",\"PingFang SC\",system-ui,sans-serif; }\n        #course-helper-license-guide input::placeholder { color:#94a3b8;font-size:12px; }\n        #course-helper-license-guide input:focus { border-color:#315fee;background:#fff; }\n        #course-helper-license-guide .guide-hint { margin:0 0 16px;color:#64748b;font-size:11px; }\n        #course-helper-license-guide .guide-service-hint { margin:0 0 10px;color:#64748b;font-size:11px; }\n        #course-helper-license-guide button { appearance:none;font:inherit;cursor:pointer; }\n        #course-helper-license-guide .guide-payment-links { display:flex;gap:10px;margin:0 0 12px;padding:0; }\n        #course-helper-license-guide .guide-payment-links a { display:flex;align-items:center;justify-content:center;flex:1;min-width:0;min-height:46px;padding:10px 6px;border:1px solid #c9d8ff;border-radius:10px;color:#2452d2;background:#eef3ff;text-align:center;text-decoration:none;font-size:14px;font-weight:700;white-space:nowrap; }\n        #course-helper-license-guide .guide-payment-links a:hover { border-color:#315fee;background:#e2ebff; }\n        #course-helper-license-guide [data-license-verify] { display:block;width:100%;min-height:48px;padding:10px 14px;border:1px solid #2759db;border-radius:10px;background:#2759db;color:#fff;font-size:14px;font-weight:700; }\n        #course-helper-license-guide [data-license-verify]:hover { background:#1f49bc; }\n        #course-helper-license-guide [data-license-later] { display:block;width:100%;margin:12px auto 0;padding:6px 8px;border:0;background:transparent;color:#64748b;font-size:12px; }\n        #course-helper-license-guide [data-license-later]:hover { color:#1e293b; }\n        #course-helper-license-guide [data-license-close] { position:absolute;right:16px;top:16px;width:30px;height:30px;padding:0;border:0;border-radius:8px;background:transparent;color:#64748b;font:22px/30px system-ui,sans-serif; }\n        #course-helper-license-guide [data-license-close]:hover { background:#f1f5f9; }\n        #course-helper-license-guide button:focus-visible, #course-helper-license-guide input:focus-visible, #course-helper-license-guide a:focus-visible { outline:2px solid #315fee;outline-offset:3px; }\n        #course-helper-license-guide [data-license-feedback] { margin-top:12px;padding:9px 11px;border:1px solid #fde4c4;border-radius:8px;background:#fff8eb;color:#975d17;font-size:12px;line-height:1.65;overflow-wrap:anywhere; }\n        #course-helper-license-guide [data-license-feedback]:empty { display:none; }\n        #course-helper-license-guide button:disabled, #course-helper-license-guide input:disabled { opacity:.55;cursor:wait; }\n        @media(max-width:400px) { #course-helper-license-guide { padding:24px 20px; } }\n      </style>\n      <button type=\"button\" data-license-close aria-label=\"关闭 Token 弹窗\">×</button>\n      <div class=\"guide-eyebrow\">课程助手</div>\n      <h3>Token</h3>\n      <p>验证 Token，即可使用查题服务。</p>\n      <div class=\"guide-benefits\"><span>验证使用权限</span><span>查询剩余次数</span><span>记录购买次数</span></div>\n      <form>\n        <label>你的 Token<input type=\"password\" data-license-entry autofocus autocomplete=\"off\" spellcheck=\"false\" placeholder=\"请粘贴完整的 Token\" aria-label=\"请输入 Token\" aria-describedby=\"course-helper-license-hint\"></label>\n        <p class=\"guide-hint\" id=\"course-helper-license-hint\">验证后保存在本机浏览器，无需每次输入。</p>\n        <p class=\"guide-service-hint\">购买后回来验证 Token，充值后点击“刷新余额”。</p>\n        <nav class=\"guide-payment-links\" aria-label=\"Token 服务\"><a data-token-service=\"new\" href=\"https://api.axetk.icu/payment-test/portal/#new\" target=\"_blank\" rel=\"noopener noreferrer\">获取 Token</a><a data-token-service=\"topup\" href=\"https://api.axetk.icu/payment-test/portal/#topup\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"自动填入当前 Token，付款前请核对\">Token 充值</a></nav>\n        <button type=\"submit\" data-license-verify>验证 Token</button>\n        <button type=\"button\" data-license-later>稍后再说，继续浏览</button>\n      </form>\n      <div data-license-feedback role=\"status\" aria-live=\"polite\"></div>","billingMarkup":"<div>授权状态：<strong data-license-state>未授权</strong></div><div>剩余次数：<strong data-license-remaining>—</strong></div><div data-license-note style=\"font-size:11px;color:#a36020\"></div><div>Token：<span data-license-mask>未设置</span></div><div><button type=\"button\" data-balance>刷新余额</button></div><div data-billing-status style=\"white-space:pre-wrap;overflow-wrap:anywhere\">等待进入考试。</div><details class=\"helper-advanced\" data-exam-retry hidden><summary>重试与说明</summary><div><button type=\"button\" data-retry>原请求重试</button><button type=\"button\" data-new>新建收费请求</button></div><small>一道有效答案扣1次。答案不足时暂停，不自动重试。重试缓存丢失可能再次收费；新请求可能重复购买。</small></details><details class=\"helper-advanced\" data-general-details><summary>查询记录与详情</summary><div><button type=\"button\" data-receipt-refresh>核对账务 / 刷新记录</button><button type=\"button\" data-receipt-more hidden>更早记录</button></div><small data-receipt-note></small><div data-receipt-list></div><div data-billing-detail style=\"white-space:pre-wrap;overflow-wrap:anywhere\"></div><div><span>v5.5.56</span><button type=\"button\" data-export-diagnostic>导出脱敏诊断</button></div></details>","inlineMarkup":"<label>Token<input type=\"password\" data-license-inline-entry autocomplete=\"off\" spellcheck=\"false\" placeholder=\"请粘贴完整的 Token\" aria-label=\"面板Token\"></label><div><button type=\"submit\" data-license-save>保存</button></div>"};
+  const huayiHelperView = {"version":"5.5.56.1079","courseStatusStyle":{"position":"fixed","right":"22px","top":"50%","transform":"translateY(-50%)","zIndex":"2147483647","minWidth":"205px","maxWidth":"360px","padding":"14px 16px","border":"0","borderRadius":"10px","color":"#fff","fontSize":"15px","lineHeight":"1.5","fontWeight":"600","whiteSpace":"normal","boxShadow":"0 5px 18px rgba(0,0,0,.25)","cursor":"pointer"},"examStatusStyle":{"position":"fixed","right":"18px","bottom":"18px","zIndex":"2147483647","padding":"10px 14px","color":"#fff","background":"#1677ff","borderRadius":"8px","fontSize":"14px","lineHeight":"1.5","boxShadow":"0 4px 14px rgba(0,0,0,.25)"},"dockStyle":"\n      #course-helper-dock { position:fixed;right:16px;top:72px;width:300px;max-width:calc(100vw - 24px);z-index:2147483647;color:#24334b;background:#f8fafc;border:1px solid #dce4ee;border-radius:18px;box-shadow:0 12px 40px #172b4d24;font:13px/1.6 system-ui,\"Microsoft YaHei\",sans-serif;overflow:hidden;text-align:left;color-scheme:light; }\n      #course-helper-dock, #course-helper-dock * { box-sizing:border-box; }\n      #course-helper-dock[hidden] { display:none!important; }\n      #course-helper-dock .helper-head { display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#fff;border-bottom:1px solid #e8edf4; }\n      #course-helper-dock .helper-title { font-size:15px;font-weight:750;color:#14253f; }\n      #course-helper-dock .helper-subtitle { font-size:11px;color:#77869b;letter-spacing:.5px; }\n      #course-helper-dock button { font:inherit;cursor:pointer;transition:filter .15s; }\n      #course-helper-dock button:hover { filter:brightness(.95); }\n      #course-helper-dock button:focus-visible, #course-helper-dock input:focus-visible, #course-helper-dock summary:focus-visible { outline:2px solid #4f7cff;outline-offset:2px; }\n      #course-helper-dock [data-dock-toggle] { padding:5px 10px;background:#eef3fb;color:#466080;border:0;border-radius:8px;font-size:12px; }\n      #course-helper-dock .helper-body { padding:12px;max-height:calc(100dvh - 230px);overflow:auto;overscroll-behavior:contain; }\n      #course-helper-dock .helper-body[hidden] { display:none; }\n      #course-helper-dock .helper-status-slot:empty { display:none; }\n      #course-helper-dock .helper-status-slot:not(:empty)::before { content:'运行状态';display:block;font-size:11px;font-weight:650;color:#75839a;margin:0 0 7px 2px; }\n      #course-helper-dock .helper-status { position:static!important;transform:none!important;min-width:0!important;max-width:none!important;width:100%!important;margin:0 0 10px!important;padding:11px 13px!important;box-shadow:none!important;border:0!important;border-radius:10px!important;font-size:12px!important;line-height:1.7!important;white-space:pre-wrap!important;text-align:left!important;overflow-wrap:anywhere; }\n      #course-helper-dock .helper-pause-slot { padding:0 12px 12px;background:#f8fafc; }\n      #course-helper-dock .helper-pause-slot:empty { display:none; }\n      #course-helper-dock .helper-pause { position:static!important;min-width:0!important;width:100%!important;padding:10px 12px!important;border-radius:10px!important;font-size:13px!important;box-shadow:none!important; }\n      #course-helper-dock .helper-billing { position:static!important;width:auto!important;max-height:none!important;overflow:visible!important;background:#fff!important;color:#24334b!important;padding:12px!important;border:1px solid #e3eaf3!important;border-radius:12px!important;font:inherit!important; }\n      #course-helper-dock .helper-billing summary { cursor:pointer;font-weight:700;color:#264772;margin-bottom:10px; }\n      #course-helper-dock .helper-billing label { display:block;font-size:12px;color:#697a92; }\n      #course-helper-dock .helper-billing input { display:block;width:100%!important;margin:5px 0 10px;padding:9px 10px;background:#f8fafc;border:1px solid #dce4ef;border-radius:8px;color:#172b4d;font:inherit; }\n      #course-helper-dock .helper-billing div:has(>button) { display:flex;gap:7px;margin:7px 0; }\n      #course-helper-dock .helper-billing button { flex:1;padding:8px 5px;border:1px solid #dfe7f2;border-radius:8px;background:#f5f8fd;color:#425b7c;font-size:12px; }\n      #course-helper-dock [data-license-inline][hidden] { display:none!important; }\n      #course-helper-dock [data-exam-retry][hidden] { display:none!important; }\n      #course-helper-dock [data-receipt-more][hidden] { display:none!important; }\n      #course-helper-dock .helper-receipt { border-bottom:1px solid #edf0f5;padding:8px 0;font-size:11px;white-space:pre-wrap;overflow-wrap:anywhere; }\n      #course-helper-dock [data-receipt-list] { max-height:210px;overflow:auto; }\n      #course-helper-dock [data-billing-detail] { font-size:11px;color:#66758a;margin-top:8px; }\n      #course-helper-dock .helper-billing [data-new] { color:#a66825; }\n      #course-helper-dock .helper-billing button:disabled { opacity:.45;cursor:wait; }\n      #course-helper-dock small { display:block;color:#8995a8;font-size:11px;line-height:1.65;margin-top:10px; }\n      #course-helper-dock [data-billing-status] { background:#f0f5ff;border-radius:8px;padding:10px;margin-top:10px;font-size:12px;color:#416087;line-height:1.7; }\n      @media(max-width:600px) { #course-helper-dock { right:8px;top:12px;width:280px; } #course-helper-dock .helper-body { max-height:calc(100dvh - 160px); } }\n      /* Compact edition: open by default, manual collapse stays respected. */\n      #course-helper-dock { top:auto;bottom:16px;right:12px;width:260px;border-radius:12px;box-shadow:0 4px 18px #172b4d1a; }\n      #course-helper-dock[data-collapsed] { width:180px; }\n      #course-helper-dock .helper-head { padding:7px 9px;gap:7px;min-height:42px;border-bottom:0; }\n      #course-helper-dock .helper-title { font-size:12px;font-weight:650;white-space:nowrap; }\n      #course-helper-dock [data-dock-toggle] { padding:4px 7px;white-space:nowrap;font-size:11px; }\n      #course-helper-dock [data-dock-toggle][data-notice]::after { content:'';display:inline-block;width:5px;height:5px;background:#315fee;border-radius:50%;margin-left:3px;vertical-align:middle; }\n      #course-helper-dock .helper-pause-slot { padding:0;background:none;margin-left:auto; }\n      #course-helper-dock .helper-pause { padding:4px 8px!important;font-size:11px!important;border-radius:6px!important;white-space:nowrap;line-height:1.6!important;font-weight:500!important; }\n      #course-helper-dock .helper-body { padding:0 9px 9px;max-height:min(360px,calc(100dvh - 224px)); }\n      #course-helper-dock .helper-status-slot:not(:empty)::before { display:none; }\n      #course-helper-dock .helper-status { margin:0 0 7px!important;padding:7px 9px!important;font-size:11px!important;line-height:1.5!important;border-radius:7px!important;max-height:100px;overflow:auto; }\n      #course-helper-dock .helper-billing { padding:9px!important;border-radius:8px!important; }\n      #course-helper-dock .helper-billing summary { margin-bottom:6px;font-size:12px; }\n      #course-helper-dock .helper-billing input { padding:6px 8px;margin:4px 0 7px; }\n      #course-helper-dock .helper-billing button { padding:6px 4px; }\n      #course-helper-dock .helper-advanced { margin-top:7px;border-top:1px solid #edf0f5;padding-top:5px; }\n      #course-helper-dock .helper-advanced summary { color:#8995a8;font-size:11px;font-weight:400;margin:0; }\n      #course-helper-dock [data-billing-status] { background:transparent;padding:0;margin-top:7px;font-size:11px;max-height:110px;overflow:auto; }\n      #course-helper-dock small { margin-top:6px; }\n      @media(max-width:600px) { #course-helper-dock { right:8px;bottom:8px;top:auto; } }\n      #course-helper-dock > .helper-status-slot:not(:empty) { padding:0 9px 7px; }\n      #course-helper-dock .helper-status { cursor:pointer!important;margin-bottom:0!important; }\n      #course-helper-dock .helper-status::after { content:attr(data-action);display:block;font-size:10px;opacity:.8;margin-top:3px; }\n      #course-helper-dock .helper-payment-links { display:flex;gap:8px;margin:5px 9px 9px;padding:8px 0 0;border-top:1px solid #dce5f5; }\n      #course-helper-dock .helper-payment-links a { display:flex;align-items:center;justify-content:center;flex:1;min-width:0;min-height:42px;padding:9px 4px;border:1px solid #2759db;border-radius:8px;color:#fff;background:#2759db;box-shadow:0 2px 6px #2759db26;text-align:center;text-decoration:none;font-size:12px;font-weight:700;white-space:nowrap; }\n      #course-helper-dock .helper-payment-links a:hover { background:#1f49bc;box-shadow:0 3px 8px #2759db38; }\n      #course-helper-dock .helper-payment-links a:focus-visible { outline:2px solid #4f7cff;outline-offset:2px; }\n      #course-helper-dock .helper-payment-links [hidden], #course-helper-license-guide .guide-payment-links [hidden] { display:none!important; }\n      #course-helper-dock [data-dock-license-change] { margin:0 9px 8px;padding:4px 7px;border:1px solid #dfe7f2;border-radius:8px;background:#eef3fb;color:#425b7c;font-size:11px; }\n    ","dockMarkup":"<header class=\"helper-head\"><span class=\"helper-title\">学习助手</span><button type=\"button\" data-dock-toggle aria-expanded=\"true\" aria-controls=\"course-helper-body\">收起</button></header><div class=\"helper-status-slot\"></div><nav class=\"helper-payment-links\" aria-label=\"Token 服务\"><a data-token-service=\"new\" href=\"https://api.axetk.icu/payment-test/portal/#new\" target=\"_blank\" rel=\"noopener noreferrer\">获取 Token</a><a data-token-service=\"topup\" href=\"https://api.axetk.icu/payment-test/portal/#topup\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"自动填入当前 Token，付款前请核对\">Token 充值</a></nav><button type=\"button\" data-dock-license-change>更换 Token</button><div id=\"course-helper-body\" class=\"helper-body\"><div class=\"helper-billing-slot\"></div></div>","guideMarkup":"\n      <style>\n        #course-helper-license-guide { position:fixed;left:50%;top:50%;margin:0;transform:translate(-50%,-50%);width:360px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px);overflow:auto;overscroll-behavior:contain;box-sizing:border-box;z-index:2147483647;padding:28px;background:#fff;color:#1e293b;border:1px solid #e2e8f0;border-radius:20px;box-shadow:0 24px 80px #0f172a29;font:14px/1.65 \"Microsoft YaHei\",\"PingFang SC\",system-ui,sans-serif;text-align:left;letter-spacing:0;color-scheme:light; }\n        #course-helper-license-guide::backdrop { background:#0f172a66;overflow:hidden;overscroll-behavior:contain;touch-action:none; }\n        #course-helper-license-guide * { box-sizing:border-box; }\n        #course-helper-license-guide .guide-eyebrow { margin:0 32px 6px 0;color:#64748b;font-size:12px;font-weight:500; }\n        #course-helper-license-guide h3 { margin:0 0 6px;color:#0f172a;font-size:28px;font-weight:700;line-height:1.3;letter-spacing:-.5px; }\n        #course-helper-license-guide p { margin:0;color:#64748b;font-size:12px;line-height:1.8; }\n        #course-helper-license-guide .guide-benefits { display:flex;flex-wrap:wrap;gap:4px 12px;margin:16px 0 22px;padding-bottom:18px;border-bottom:1px solid #eef2f6;color:#64748b;font-size:11px; }\n        #course-helper-license-guide form { margin:0; }\n        #course-helper-license-guide label { display:block;color:#1e293b;font-size:13px;font-weight:600; }\n        #course-helper-license-guide input { display:block;width:100%;min-width:0;height:48px;margin:8px 0 6px;padding:0 12px;border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc;color:#1e293b;font:14px/1.5 \"Microsoft YaHei\",\"PingFang SC\",system-ui,sans-serif; }\n        #course-helper-license-guide input::placeholder { color:#94a3b8;font-size:12px; }\n        #course-helper-license-guide input:focus { border-color:#315fee;background:#fff; }\n        #course-helper-license-guide .guide-hint { margin:0 0 16px;color:#64748b;font-size:11px; }\n        #course-helper-license-guide .guide-service-hint { margin:0 0 10px;color:#64748b;font-size:11px; }\n        #course-helper-license-guide button { appearance:none;font:inherit;cursor:pointer; }\n        #course-helper-license-guide .guide-payment-links { display:flex;gap:10px;margin:0 0 12px;padding:0; }\n        #course-helper-license-guide .guide-payment-links a { display:flex;align-items:center;justify-content:center;flex:1;min-width:0;min-height:46px;padding:10px 6px;border:1px solid #c9d8ff;border-radius:10px;color:#2452d2;background:#eef3ff;text-align:center;text-decoration:none;font-size:14px;font-weight:700;white-space:nowrap; }\n        #course-helper-license-guide .guide-payment-links a:hover { border-color:#315fee;background:#e2ebff; }\n        #course-helper-license-guide [data-license-verify] { display:block;width:100%;min-height:48px;padding:10px 14px;border:1px solid #2759db;border-radius:10px;background:#2759db;color:#fff;font-size:14px;font-weight:700; }\n        #course-helper-license-guide [data-license-verify]:hover { background:#1f49bc; }\n        #course-helper-license-guide [data-license-later] { display:block;width:100%;margin:12px auto 0;padding:6px 8px;border:0;background:transparent;color:#64748b;font-size:12px; }\n        #course-helper-license-guide [data-license-later]:hover { color:#1e293b; }\n        #course-helper-license-guide [data-license-close] { position:absolute;right:16px;top:16px;width:30px;height:30px;padding:0;border:0;border-radius:8px;background:transparent;color:#64748b;font:22px/30px system-ui,sans-serif; }\n        #course-helper-license-guide [data-license-close]:hover { background:#f1f5f9; }\n        #course-helper-license-guide button:focus-visible, #course-helper-license-guide input:focus-visible, #course-helper-license-guide a:focus-visible { outline:2px solid #315fee;outline-offset:3px; }\n        #course-helper-license-guide [data-license-feedback] { margin-top:12px;padding:9px 11px;border:1px solid #fde4c4;border-radius:8px;background:#fff8eb;color:#975d17;font-size:12px;line-height:1.65;overflow-wrap:anywhere; }\n        #course-helper-license-guide [data-license-feedback]:empty { display:none; }\n        #course-helper-license-guide button:disabled, #course-helper-license-guide input:disabled { opacity:.55;cursor:wait; }\n        @media(max-width:400px) { #course-helper-license-guide { padding:24px 20px; } }\n      </style>\n      <button type=\"button\" data-license-close aria-label=\"关闭 Token 弹窗\">×</button>\n      <div class=\"guide-eyebrow\">课程助手</div>\n      <h3>Token</h3>\n      <p>验证 Token，即可使用查题服务。</p>\n      <div class=\"guide-benefits\"><span>验证使用权限</span><span>查询剩余次数</span><span>记录购买次数</span></div>\n      <form>\n        <label>你的 Token<input type=\"password\" data-license-entry autofocus autocomplete=\"off\" spellcheck=\"false\" placeholder=\"请粘贴完整的 Token\" aria-label=\"请输入 Token\" aria-describedby=\"course-helper-license-hint\"></label>\n        <p class=\"guide-hint\" id=\"course-helper-license-hint\">验证后保存在本机浏览器，无需每次输入。</p>\n        <p class=\"guide-service-hint\">购买后回来验证 Token，充值后点击“刷新余额”。</p>\n        <nav class=\"guide-payment-links\" aria-label=\"Token 服务\"><a data-token-service=\"new\" href=\"https://api.axetk.icu/payment-test/portal/#new\" target=\"_blank\" rel=\"noopener noreferrer\">获取 Token</a><a data-token-service=\"topup\" href=\"https://api.axetk.icu/payment-test/portal/#topup\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"自动填入当前 Token，付款前请核对\">Token 充值</a></nav>\n        <button type=\"submit\" data-license-verify>验证 Token</button>\n        <button type=\"button\" data-license-later>稍后再说，继续浏览</button>\n      </form>\n      <div data-license-feedback role=\"status\" aria-live=\"polite\"></div>","billingMarkup":"<div>授权状态：<strong data-license-state>未授权</strong></div><div>剩余次数：<strong data-license-remaining>—</strong></div><div data-license-note style=\"font-size:11px;color:#a36020\"></div><div>Token：<span data-license-mask>未设置</span></div><div><button type=\"button\" data-balance>刷新余额</button></div><div data-billing-status style=\"white-space:pre-wrap;overflow-wrap:anywhere\">等待进入考试。</div><details class=\"helper-advanced\" data-exam-retry hidden><summary>重试与说明</summary><div><button type=\"button\" data-retry>原请求重试</button><button type=\"button\" data-new>新建收费请求</button></div><small>一道有效答案扣1次。答案不足时暂停，不自动重试。重试缓存丢失可能再次收费；新请求可能重复购买。</small></details><details class=\"helper-advanced\" data-general-details><summary>查询记录与详情</summary><div><button type=\"button\" data-receipt-refresh>核对账务 / 刷新记录</button><button type=\"button\" data-receipt-more hidden>更早记录</button></div><small data-receipt-note></small><div data-receipt-list></div><div data-billing-detail style=\"white-space:pre-wrap;overflow-wrap:anywhere\"></div><div><span>v5.5.56</span><button type=\"button\" data-export-diagnostic>导出脱敏诊断</button></div></details>","inlineMarkup":"<label>Token<input type=\"password\" data-license-inline-entry autocomplete=\"off\" spellcheck=\"false\" placeholder=\"请粘贴完整的 Token\" aria-label=\"面板Token\"></label><div><button type=\"submit\" data-license-save>保存</button></div>"};
   const hostOK = host => /(^|\.)91huayi\.com$/i.test(host);
   const billingOrigin = w.location.origin === 'https://cme28.91huayi.com';
   function pageKind(href) {
@@ -401,7 +404,7 @@ function startHuayiAdapter(w, parseHints, createBillingClient, QueryJournal, val
     const token = dialog.querySelector('input');
     const verifyButton = dialog.querySelector('[data-license-verify]');
     const feedback = dialog.querySelector('[data-license-feedback]');
-    const client = createBillingClient(tokenBalanceTransport(w.fetch.bind(w)), () => w.crypto.randomUUID());
+    const client = createBillingClient(tokenBalanceTransport(billingFetch || w.fetch.bind(w)), () => w.crypto.randomUUID());
     const tabKey = 'course-helper.huayi.authorization';
     let verifiedKey = '', remaining = null, checking = false;
     let lastVerifyTime = 0, fromShared = false;
@@ -2066,9 +2069,1479 @@ function watchHuayiExamSubmission(w, isPaused) {
 }
 // HUAYI ADAPTER END
 
+// JUMING ADAPTER START
+// Platform selectors are based on the audited v5.8.4 userscript; live pages still need field verification.
+function createUserscriptBillingFetch(gmRequest) {
+  return function userscriptBillingFetch(url, options = {}) {
+    return new Promise((resolve, reject) => {
+      let request = null, settled = false;
+      const signal = options.signal;
+      const finish = (callback, value) => {
+        if (settled) return;
+        settled = true;
+        signal?.removeEventListener('abort', onAbort);
+        callback(value);
+      };
+      const failure = (name, message) => {
+        const error = new Error(message); error.name = name;
+        finish(reject, error);
+      };
+      const onAbort = () => {
+        try { request?.abort(); } catch { /* Best-effort cancellation. */ }
+        failure('AbortError', 'Request aborted');
+      };
+      if (signal?.aborted) { onAbort(); return; }
+      signal?.addEventListener('abort', onAbort, { once: true });
+      try {
+        request = gmRequest({
+          method: options.method || 'GET', url, headers: options.headers || {}, data: options.body,
+          anonymous: true, responseType: 'text', timeout: 65000, redirect: 'error',
+          onload(response) {
+            if (!Number.isInteger(response.status) || response.status < 100) {
+              failure('TypeError', 'Invalid response status'); return;
+            }
+            try {
+              if (response.finalUrl && new URL(response.finalUrl).href !== new URL(url).href) {
+                failure('TypeError', 'Redirect blocked'); return;
+              }
+            } catch { failure('TypeError', 'Invalid response URL'); return; }
+            const values = new Map();
+            for (const line of String(response.responseHeaders || '').split(/\r?\n/)) {
+              const split = line.indexOf(':');
+              if (split <= 0) continue;
+              const name = line.slice(0, split).trim().toLowerCase(), value = line.slice(split + 1).trim();
+              values.set(name, values.has(name) ? `${values.get(name)}, ${value}` : value);
+            }
+            const body = typeof response.responseText === 'string' ? response.responseText : String(response.response ?? '');
+            finish(resolve, {
+              status: response.status, ok: response.status >= 200 && response.status < 300,
+              headers: { get: name => values.get(String(name).toLowerCase()) ?? null },
+              json: async () => JSON.parse(body)
+            });
+          },
+          onerror() { failure('TypeError', 'Request failed'); },
+          onabort() { failure('AbortError', 'Request aborted'); },
+          ontimeout() { failure('TimeoutError', 'Request timed out'); }
+        });
+      } catch { failure('TypeError', 'Request setup failed'); }
+    });
+  };
+}
+
+function startJumingAdapter(w, parseHints, createBillingClient, QueryJournal, validLicenseFormat,
+  tokenBalanceTransport, tokenVerificationMessages, billingFetch) {
+  const d = w.document;
+  const jumingHelperView = {"version":"5.5.56.1079","courseStatusStyle":{"position":"fixed","right":"22px","top":"50%","transform":"translateY(-50%)","zIndex":"2147483647","minWidth":"205px","maxWidth":"360px","padding":"14px 16px","border":"0","borderRadius":"10px","color":"#fff","fontSize":"15px","lineHeight":"1.5","fontWeight":"600","whiteSpace":"normal","boxShadow":"0 5px 18px rgba(0,0,0,.25)","cursor":"pointer"},"examStatusStyle":{"position":"fixed","right":"18px","bottom":"18px","zIndex":"2147483647","padding":"10px 14px","color":"#fff","background":"#1677ff","borderRadius":"8px","fontSize":"14px","lineHeight":"1.5","boxShadow":"0 4px 14px rgba(0,0,0,.25)"},"dockStyle":"\n      #course-helper-dock { position:fixed;right:16px;top:72px;width:300px;max-width:calc(100vw - 24px);z-index:2147483647;color:#24334b;background:#f8fafc;border:1px solid #dce4ee;border-radius:18px;box-shadow:0 12px 40px #172b4d24;font:13px/1.6 system-ui,\"Microsoft YaHei\",sans-serif;overflow:hidden;text-align:left;color-scheme:light; }\n      #course-helper-dock, #course-helper-dock * { box-sizing:border-box; }\n      #course-helper-dock[hidden] { display:none!important; }\n      #course-helper-dock .helper-head { display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#fff;border-bottom:1px solid #e8edf4; }\n      #course-helper-dock .helper-title { font-size:15px;font-weight:750;color:#14253f; }\n      #course-helper-dock .helper-subtitle { font-size:11px;color:#77869b;letter-spacing:.5px; }\n      #course-helper-dock button { font:inherit;cursor:pointer;transition:filter .15s; }\n      #course-helper-dock button:hover { filter:brightness(.95); }\n      #course-helper-dock button:focus-visible, #course-helper-dock input:focus-visible, #course-helper-dock summary:focus-visible { outline:2px solid #4f7cff;outline-offset:2px; }\n      #course-helper-dock [data-dock-toggle] { padding:5px 10px;background:#eef3fb;color:#466080;border:0;border-radius:8px;font-size:12px; }\n      #course-helper-dock .helper-body { padding:12px;max-height:calc(100dvh - 230px);overflow:auto;overscroll-behavior:contain; }\n      #course-helper-dock .helper-body[hidden] { display:none; }\n      #course-helper-dock .helper-status-slot:empty { display:none; }\n      #course-helper-dock .helper-status-slot:not(:empty)::before { content:'运行状态';display:block;font-size:11px;font-weight:650;color:#75839a;margin:0 0 7px 2px; }\n      #course-helper-dock .helper-status { position:static!important;transform:none!important;min-width:0!important;max-width:none!important;width:100%!important;margin:0 0 10px!important;padding:11px 13px!important;box-shadow:none!important;border:0!important;border-radius:10px!important;font-size:12px!important;line-height:1.7!important;white-space:pre-wrap!important;text-align:left!important;overflow-wrap:anywhere; }\n      #course-helper-dock .helper-pause-slot { padding:0 12px 12px;background:#f8fafc; }\n      #course-helper-dock .helper-pause-slot:empty { display:none; }\n      #course-helper-dock .helper-pause { position:static!important;min-width:0!important;width:100%!important;padding:10px 12px!important;border-radius:10px!important;font-size:13px!important;box-shadow:none!important; }\n      #course-helper-dock .helper-billing { position:static!important;width:auto!important;max-height:none!important;overflow:visible!important;background:#fff!important;color:#24334b!important;padding:12px!important;border:1px solid #e3eaf3!important;border-radius:12px!important;font:inherit!important; }\n      #course-helper-dock .helper-billing summary { cursor:pointer;font-weight:700;color:#264772;margin-bottom:10px; }\n      #course-helper-dock .helper-billing label { display:block;font-size:12px;color:#697a92; }\n      #course-helper-dock .helper-billing input { display:block;width:100%!important;margin:5px 0 10px;padding:9px 10px;background:#f8fafc;border:1px solid #dce4ef;border-radius:8px;color:#172b4d;font:inherit; }\n      #course-helper-dock .helper-billing div:has(>button) { display:flex;gap:7px;margin:7px 0; }\n      #course-helper-dock .helper-billing button { flex:1;padding:8px 5px;border:1px solid #dfe7f2;border-radius:8px;background:#f5f8fd;color:#425b7c;font-size:12px; }\n      #course-helper-dock [data-license-inline][hidden] { display:none!important; }\n      #course-helper-dock [data-exam-retry][hidden] { display:none!important; }\n      #course-helper-dock [data-receipt-more][hidden] { display:none!important; }\n      #course-helper-dock .helper-receipt { border-bottom:1px solid #edf0f5;padding:8px 0;font-size:11px;white-space:pre-wrap;overflow-wrap:anywhere; }\n      #course-helper-dock [data-receipt-list] { max-height:210px;overflow:auto; }\n      #course-helper-dock [data-billing-detail] { font-size:11px;color:#66758a;margin-top:8px; }\n      #course-helper-dock .helper-billing [data-new] { color:#a66825; }\n      #course-helper-dock .helper-billing button:disabled { opacity:.45;cursor:wait; }\n      #course-helper-dock small { display:block;color:#8995a8;font-size:11px;line-height:1.65;margin-top:10px; }\n      #course-helper-dock [data-billing-status] { background:#f0f5ff;border-radius:8px;padding:10px;margin-top:10px;font-size:12px;color:#416087;line-height:1.7; }\n      @media(max-width:600px) { #course-helper-dock { right:8px;top:12px;width:280px; } #course-helper-dock .helper-body { max-height:calc(100dvh - 160px); } }\n      /* Compact edition: open by default, manual collapse stays respected. */\n      #course-helper-dock { top:auto;bottom:16px;right:12px;width:260px;border-radius:12px;box-shadow:0 4px 18px #172b4d1a; }\n      #course-helper-dock[data-collapsed] { width:180px; }\n      #course-helper-dock .helper-head { padding:7px 9px;gap:7px;min-height:42px;border-bottom:0; }\n      #course-helper-dock .helper-title { font-size:12px;font-weight:650;white-space:nowrap; }\n      #course-helper-dock [data-dock-toggle] { padding:4px 7px;white-space:nowrap;font-size:11px; }\n      #course-helper-dock [data-dock-toggle][data-notice]::after { content:'';display:inline-block;width:5px;height:5px;background:#315fee;border-radius:50%;margin-left:3px;vertical-align:middle; }\n      #course-helper-dock .helper-pause-slot { padding:0;background:none;margin-left:auto; }\n      #course-helper-dock .helper-pause { padding:4px 8px!important;font-size:11px!important;border-radius:6px!important;white-space:nowrap;line-height:1.6!important;font-weight:500!important; }\n      #course-helper-dock .helper-body { padding:0 9px 9px;max-height:min(360px,calc(100dvh - 224px)); }\n      #course-helper-dock .helper-status-slot:not(:empty)::before { display:none; }\n      #course-helper-dock .helper-status { margin:0 0 7px!important;padding:7px 9px!important;font-size:11px!important;line-height:1.5!important;border-radius:7px!important;max-height:100px;overflow:auto; }\n      #course-helper-dock .helper-billing { padding:9px!important;border-radius:8px!important; }\n      #course-helper-dock .helper-billing summary { margin-bottom:6px;font-size:12px; }\n      #course-helper-dock .helper-billing input { padding:6px 8px;margin:4px 0 7px; }\n      #course-helper-dock .helper-billing button { padding:6px 4px; }\n      #course-helper-dock .helper-advanced { margin-top:7px;border-top:1px solid #edf0f5;padding-top:5px; }\n      #course-helper-dock .helper-advanced summary { color:#8995a8;font-size:11px;font-weight:400;margin:0; }\n      #course-helper-dock [data-billing-status] { background:transparent;padding:0;margin-top:7px;font-size:11px;max-height:110px;overflow:auto; }\n      #course-helper-dock small { margin-top:6px; }\n      @media(max-width:600px) { #course-helper-dock { right:8px;bottom:8px;top:auto; } }\n      #course-helper-dock > .helper-status-slot:not(:empty) { padding:0 9px 7px; }\n      #course-helper-dock .helper-status { cursor:pointer!important;margin-bottom:0!important; }\n      #course-helper-dock .helper-status::after { content:attr(data-action);display:block;font-size:10px;opacity:.8;margin-top:3px; }\n      #course-helper-dock .helper-payment-links { display:flex;gap:8px;margin:5px 9px 9px;padding:8px 0 0;border-top:1px solid #dce5f5; }\n      #course-helper-dock .helper-payment-links a { display:flex;align-items:center;justify-content:center;flex:1;min-width:0;min-height:42px;padding:9px 4px;border:1px solid #2759db;border-radius:8px;color:#fff;background:#2759db;box-shadow:0 2px 6px #2759db26;text-align:center;text-decoration:none;font-size:12px;font-weight:700;white-space:nowrap; }\n      #course-helper-dock .helper-payment-links a:hover { background:#1f49bc;box-shadow:0 3px 8px #2759db38; }\n      #course-helper-dock .helper-payment-links a:focus-visible { outline:2px solid #4f7cff;outline-offset:2px; }\n      #course-helper-dock .helper-payment-links [hidden], #course-helper-license-guide .guide-payment-links [hidden] { display:none!important; }\n      #course-helper-dock [data-dock-license-change] { margin:0 9px 8px;padding:4px 7px;border:1px solid #dfe7f2;border-radius:8px;background:#eef3fb;color:#425b7c;font-size:11px; }\n    ","dockMarkup":"<header class=\"helper-head\"><span class=\"helper-title\">学习助手</span><button type=\"button\" data-dock-toggle aria-expanded=\"true\" aria-controls=\"course-helper-body\">收起</button></header><div class=\"helper-status-slot\"></div><nav class=\"helper-payment-links\" aria-label=\"Token 服务\"><a data-token-service=\"new\" href=\"https://api.axetk.icu/payment-test/portal/#new\" target=\"_blank\" rel=\"noopener noreferrer\">获取 Token</a><a data-token-service=\"topup\" href=\"https://api.axetk.icu/payment-test/portal/#topup\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"自动填入当前 Token，付款前请核对\">Token 充值</a></nav><button type=\"button\" data-dock-license-change>更换 Token</button><div id=\"course-helper-body\" class=\"helper-body\"><div class=\"helper-billing-slot\"></div></div>","guideMarkup":"\n      <style>\n        #course-helper-license-guide { position:fixed;left:50%;top:50%;margin:0;transform:translate(-50%,-50%);width:360px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px);overflow:auto;overscroll-behavior:contain;box-sizing:border-box;z-index:2147483647;padding:28px;background:#fff;color:#1e293b;border:1px solid #e2e8f0;border-radius:20px;box-shadow:0 24px 80px #0f172a29;font:14px/1.65 \"Microsoft YaHei\",\"PingFang SC\",system-ui,sans-serif;text-align:left;letter-spacing:0;color-scheme:light; }\n        #course-helper-license-guide::backdrop { background:#0f172a66;overflow:hidden;overscroll-behavior:contain;touch-action:none; }\n        #course-helper-license-guide * { box-sizing:border-box; }\n        #course-helper-license-guide .guide-eyebrow { margin:0 32px 6px 0;color:#64748b;font-size:12px;font-weight:500; }\n        #course-helper-license-guide h3 { margin:0 0 6px;color:#0f172a;font-size:28px;font-weight:700;line-height:1.3;letter-spacing:-.5px; }\n        #course-helper-license-guide p { margin:0;color:#64748b;font-size:12px;line-height:1.8; }\n        #course-helper-license-guide .guide-benefits { display:flex;flex-wrap:wrap;gap:4px 12px;margin:16px 0 22px;padding-bottom:18px;border-bottom:1px solid #eef2f6;color:#64748b;font-size:11px; }\n        #course-helper-license-guide form { margin:0; }\n        #course-helper-license-guide label { display:block;color:#1e293b;font-size:13px;font-weight:600; }\n        #course-helper-license-guide input { display:block;width:100%;min-width:0;height:48px;margin:8px 0 6px;padding:0 12px;border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc;color:#1e293b;font:14px/1.5 \"Microsoft YaHei\",\"PingFang SC\",system-ui,sans-serif; }\n        #course-helper-license-guide input::placeholder { color:#94a3b8;font-size:12px; }\n        #course-helper-license-guide input:focus { border-color:#315fee;background:#fff; }\n        #course-helper-license-guide .guide-hint { margin:0 0 16px;color:#64748b;font-size:11px; }\n        #course-helper-license-guide .guide-service-hint { margin:0 0 10px;color:#64748b;font-size:11px; }\n        #course-helper-license-guide button { appearance:none;font:inherit;cursor:pointer; }\n        #course-helper-license-guide .guide-payment-links { display:flex;gap:10px;margin:0 0 12px;padding:0; }\n        #course-helper-license-guide .guide-payment-links a { display:flex;align-items:center;justify-content:center;flex:1;min-width:0;min-height:46px;padding:10px 6px;border:1px solid #c9d8ff;border-radius:10px;color:#2452d2;background:#eef3ff;text-align:center;text-decoration:none;font-size:14px;font-weight:700;white-space:nowrap; }\n        #course-helper-license-guide .guide-payment-links a:hover { border-color:#315fee;background:#e2ebff; }\n        #course-helper-license-guide [data-license-verify] { display:block;width:100%;min-height:48px;padding:10px 14px;border:1px solid #2759db;border-radius:10px;background:#2759db;color:#fff;font-size:14px;font-weight:700; }\n        #course-helper-license-guide [data-license-verify]:hover { background:#1f49bc; }\n        #course-helper-license-guide [data-license-later] { display:block;width:100%;margin:12px auto 0;padding:6px 8px;border:0;background:transparent;color:#64748b;font-size:12px; }\n        #course-helper-license-guide [data-license-later]:hover { color:#1e293b; }\n        #course-helper-license-guide [data-license-close] { position:absolute;right:16px;top:16px;width:30px;height:30px;padding:0;border:0;border-radius:8px;background:transparent;color:#64748b;font:22px/30px system-ui,sans-serif; }\n        #course-helper-license-guide [data-license-close]:hover { background:#f1f5f9; }\n        #course-helper-license-guide button:focus-visible, #course-helper-license-guide input:focus-visible, #course-helper-license-guide a:focus-visible { outline:2px solid #315fee;outline-offset:3px; }\n        #course-helper-license-guide [data-license-feedback] { margin-top:12px;padding:9px 11px;border:1px solid #fde4c4;border-radius:8px;background:#fff8eb;color:#975d17;font-size:12px;line-height:1.65;overflow-wrap:anywhere; }\n        #course-helper-license-guide [data-license-feedback]:empty { display:none; }\n        #course-helper-license-guide button:disabled, #course-helper-license-guide input:disabled { opacity:.55;cursor:wait; }\n        @media(max-width:400px) { #course-helper-license-guide { padding:24px 20px; } }\n      </style>\n      <button type=\"button\" data-license-close aria-label=\"关闭 Token 弹窗\">×</button>\n      <div class=\"guide-eyebrow\">课程助手</div>\n      <h3>Token</h3>\n      <p>验证 Token，即可使用查题服务。</p>\n      <div class=\"guide-benefits\"><span>验证使用权限</span><span>查询剩余次数</span><span>记录购买次数</span></div>\n      <form>\n        <label>你的 Token<input type=\"password\" data-license-entry autofocus autocomplete=\"off\" spellcheck=\"false\" placeholder=\"请粘贴完整的 Token\" aria-label=\"请输入 Token\" aria-describedby=\"course-helper-license-hint\"></label>\n        <p class=\"guide-hint\" id=\"course-helper-license-hint\">验证后保存在本机浏览器，无需每次输入。</p>\n        <p class=\"guide-service-hint\">购买后回来验证 Token，充值后点击“刷新余额”。</p>\n        <nav class=\"guide-payment-links\" aria-label=\"Token 服务\"><a data-token-service=\"new\" href=\"https://api.axetk.icu/payment-test/portal/#new\" target=\"_blank\" rel=\"noopener noreferrer\">获取 Token</a><a data-token-service=\"topup\" href=\"https://api.axetk.icu/payment-test/portal/#topup\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"自动填入当前 Token，付款前请核对\">Token 充值</a></nav>\n        <button type=\"submit\" data-license-verify>验证 Token</button>\n        <button type=\"button\" data-license-later>稍后再说，继续浏览</button>\n      </form>\n      <div data-license-feedback role=\"status\" aria-live=\"polite\"></div>","billingMarkup":"<div>授权状态：<strong data-license-state>未授权</strong></div><div>剩余次数：<strong data-license-remaining>—</strong></div><div data-license-note style=\"font-size:11px;color:#a36020\"></div><div>Token：<span data-license-mask>未设置</span></div><div><button type=\"button\" data-balance>刷新余额</button></div><div data-billing-status style=\"white-space:pre-wrap;overflow-wrap:anywhere\">等待进入考试。</div><details class=\"helper-advanced\" data-exam-retry hidden><summary>重试与说明</summary><div><button type=\"button\" data-retry>原请求重试</button><button type=\"button\" data-new>新建收费请求</button></div><small>一道有效答案扣1次。答案不足时暂停，不自动重试。重试缓存丢失可能再次收费；新请求可能重复购买。</small></details><details class=\"helper-advanced\" data-general-details><summary>查询记录与详情</summary><div><button type=\"button\" data-receipt-refresh>核对账务 / 刷新记录</button><button type=\"button\" data-receipt-more hidden>更早记录</button></div><small data-receipt-note></small><div data-receipt-list></div><div data-billing-detail style=\"white-space:pre-wrap;overflow-wrap:anywhere\"></div><div><span>v5.5.56</span><button type=\"button\" data-export-diagnostic>导出脱敏诊断</button></div></details>","inlineMarkup":"<label>Token<input type=\"password\" data-license-inline-entry autocomplete=\"off\" spellcheck=\"false\" placeholder=\"请粘贴完整的 Token\" aria-label=\"面板Token\"></label><div><button type=\"submit\" data-license-save>保存</button></div>"};
+  const hostOK = host => /(^|\.)jumingedu\.com$/i.test(host);
+  function pageKind(href) {
+    const url = new URL(href);
+    if (!hostOK(url.hostname)) return '';
+    if (/^\/MedicalIndex\/videoPlay\/?$/i.test(url.pathname)) return 'video';
+    if (/^\/MedicalIndex\/medicalAssess\/?$/i.test(url.pathname)) return 'exam';
+    return '';
+  }
+  if (!hostOK(w.location.hostname) || w.top !== w.self) return null;
+  w.__courseHelperJuming?.destroy();
+
+  const stateKey = 'course-helper.juming.flow.v1';
+  const shared = createSharedLicenseStore(validLicenseFormat);
+  const journal = new QueryJournal(() => w.sessionStorage);
+  const transportName = typeof billingFetch === 'function' ? 'gm_xmlhttpRequest' : 'native_fetch';
+  const requestFetch = billingFetch || w.fetch.bind(w);
+  const client = w.isSecureContext && w.crypto?.randomUUID
+    ? createBillingClient(tokenBalanceTransport(requestFetch), () => w.crypto.randomUUID()) : null;
+  const text = element => String(element?.textContent || '').replace(/\s+/g, ' ').trim();
+  const normalize = value => String(value || '').normalize('NFKC').replace(/\s+/g, '').toLowerCase();
+  const usable = element => {
+    if (!(element instanceof w.HTMLElement) || !element.isConnected || element.matches(':disabled,[aria-disabled="true"],[inert]')) return false;
+    const style = w.getComputedStyle(element);
+    return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) !== 0 && !element.hidden;
+  };
+  const visibleInTree = element => {
+    if (!usable(element)) return false;
+    for (let node = element.parentElement; node; node = node.parentElement) {
+      const style = w.getComputedStyle(node);
+      if (node.hidden || node.matches('[inert],[aria-hidden="true"]') || style.display === 'none' ||
+          style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
+    }
+    return true;
+  };
+  const click = element => {
+    if (!usable(element)) return false;
+    element.scrollIntoView({ block: 'center' });
+    try { element.click(); return true; } catch { return false; }
+  };
+
+  let saved = null;
+  try {
+    const raw = w.sessionStorage.getItem(stateKey);
+    if (raw && raw.length < 2000) saved = JSON.parse(raw);
+  } catch { /* Session state is optional. */ }
+  let enabled = saved?.version === 1 && saved.enabled === true;
+  let waitingQr = saved?.version === 1 && saved.waitingQr === true;
+  let alive = true, panel = null, statusEl = null, billingPanel = null, tokenGuide = null;
+  let observer = null, timer = null, scheduled = null, submitTimer = null, currentKind = '';
+  let navigationAt = 0, lastSignAt = 0, queryBusy = false, currentJob = null, currentScope = '';
+  let studyReminderRecovery = null, lastRunningPauseAt = 0;
+  let backgroundTitle = null, localRtc = null, rtcRetryAt = 0, rtcFailures = 0;
+  let backgroundResumeTimer = null, backgroundResumePending = null, backgroundRetryAt = 0;
+  let backgroundRetryDelay = 1000, backgroundTransitionAt = 0;
+  let userActivityTimer = null, lifecycleSnapshot = null, pageAway = false, frozen = false, userIntentEpoch = 0;
+  let verifiedKey = '', remaining = null, message = '', messageTone = 'normal';
+  let tokenGeneration = 0, tokenRefreshBusy = false, tokenRefreshPending = false;
+  let examPaused = false, submitted = false, autoArmed = false, autoUsed = false, stableBatch = '', stableSince = 0;
+  let pendingSubmitHints = null, pendingSubmitKey = '';
+  let pendingExamRetry = null, retryFillTask = null, handledFailureDialog = null, retryScope = '', retryAttempts = 0;
+  let returnFocus = null, scrollState = null;
+  const clickedSigns = new WeakSet(), clickedAssess = new WeakSet();
+  const userActivityBurstTimers = new Set();
+  const learnedSelections = new Map(), MAX_EXAM_RETRY_ATTEMPTS = 10;
+
+  const stored = shared?.read();
+  if (stored) {
+    verifiedKey = stored.licenseKey;
+    remaining = stored.remaining;
+    tokenRefreshPending = !!client;
+  }
+
+  function save() {
+    try { w.sessionStorage.setItem(stateKey, JSON.stringify({ version: 1, enabled, waitingQr, at: Date.now() })); }
+    catch { /* The adapter remains usable without persistence. */ }
+  }
+
+  function readCourses() {
+    return [...d.querySelectorAll('.directoryList .item')].map((element, index) => {
+      const status = text(element.querySelector('.status'));
+      const match = status.match(/^已学\s*(\d+(?:\.\d+)?)\s*%$/);
+      return {
+        index,
+        element,
+        title: text(element.querySelector('.title')) || `课程 ${index + 1}`,
+        status,
+        progress: match ? Math.min(100, Number(match[1])) : null,
+        current: element.matches('.active,.current,.is-active,[aria-current="true"]') ||
+          !!element.querySelector('.active,.current,.is-active,[aria-current="true"]')
+      };
+    });
+  }
+
+  function optionText(question, input, index) {
+    const labelled = [...(input.labels || [])].find(label => question.contains(label));
+    const container = labelled || input.closest('label,.el-radio,.el-checkbox') || input.parentElement;
+    let value = text(container);
+    const prefix = value.match(/^\s*([A-H])\s*[、.．:：)）]\s*/i);
+    if (prefix) value = value.slice(prefix[0].length).trim();
+    return { label: prefix?.[1]?.toUpperCase() || String.fromCharCode(65 + index), value };
+  }
+
+  function parseQuestions() {
+    const rows = [...d.querySelectorAll('.itemTopic')];
+    if (!rows.length) return { hints: [], controls: [], error: '' };
+    const list = [], controls = [];
+    for (const row of rows) {
+      let title = text(row.querySelector('.title,.stem'));
+      title = title.replace(/^\s*\d+\s*[、.．)）]?\s*/, '')
+        .replace(/[（(](?:单选题|多选题|判断题)[）)]|【判断题】/g, '').trim();
+      const inputs = [...row.querySelectorAll('input[type="radio"],input[type="checkbox"]')];
+      if (!title || inputs.length < 2 || inputs.some(input => input.type !== inputs[0].type)) {
+        return { hints: [], controls: [], error: '题目结构不完整' };
+      }
+      const option = [], labels = new Set();
+      for (const [index, input] of inputs.entries()) {
+        const parsed = optionText(row, input, index);
+        if (!parsed.value || !/^[A-H]$/.test(parsed.label) || labels.has(parsed.label)) {
+          return { hints: [], controls: [], error: '选项结构不完整或标签重复' };
+        }
+        labels.add(parsed.label);
+        option.push({ [parsed.label]: parsed.value });
+      }
+      list.push({ title, type: inputs[0].type === 'checkbox' ? '1' : '0', option });
+      controls.push(inputs);
+    }
+    const hints = parseHints({ data: { list } });
+    return hints ? { hints, controls, error: '' } : { hints: [], controls: [], error: '题目信息超出接口限制' };
+  }
+
+  function setChecked(input, wanted) {
+    if (!input.isConnected || input.matches(':disabled') || input.checked === wanted) return input.checked === wanted;
+    const target = input.closest('label,.el-radio,.el-checkbox') || input;
+    try { target.click(); } catch { return false; }
+    return input.checked === wanted;
+  }
+
+  async function fillExam(result, parsed) {
+    const answers = new Map();
+    for (const answer of result.questions) {
+      const key = JSON.stringify([String(answer.type), normalize(answer.title)]);
+      answers.set(key, answers.has(key) ? null : answer);
+    }
+    const localKeys = parsed.hints.map(question => JSON.stringify([String(question.type), normalize(question.title)]));
+    const plannedSelections = new Map();
+    for (const [index, question] of parsed.hints.entries()) {
+      const key = localKeys[index], answer = answers.get(key);
+      if (!answer || localKeys.indexOf(key) !== localKeys.lastIndexOf(key)) continue;
+      const labels = question.option.map(option => Object.keys(option)[0].toUpperCase());
+      const values = question.option.map(option => normalize(Object.values(option)[0]));
+      let selected = Array.isArray(answer.answer_labels)
+        ? answer.answer_labels.map(label => labels.indexOf(String(label).toUpperCase())) : [];
+      if (!selected.length || selected.some(position => position < 0)) {
+        selected = (answer.answer_values || []).map(value => {
+          const normalized = normalize(value);
+          return values.indexOf(normalized) === values.lastIndexOf(normalized) ? values.indexOf(normalized) : -1;
+        });
+      }
+      if (!selected.length || selected.some(position => position < 0) || new Set(selected).size !== selected.length ||
+          (question.type !== '1' && selected.length !== 1)) continue;
+      const inputs = parsed.controls[index];
+      if (!inputs?.every(input => input.isConnected)) continue;
+      plannedSelections.set(index, selected);
+      for (const [position, input] of inputs.entries()) {
+        const wanted = selected.includes(position);
+        if (question.type !== '1' && !wanted) continue;
+        setChecked(input, wanted);
+      }
+    }
+    await new Promise(resolve => w.setTimeout(resolve, 100));
+    const settled = parseQuestions();
+    if (JSON.stringify(settled.hints) !== JSON.stringify(parsed.hints)) return 0;
+    let filled = 0;
+    for (const [index, selected] of plannedSelections) {
+      const inputs = settled.controls[index];
+      if (inputs?.every((input, position) => input.isConnected && input.checked === selected.includes(position))) filled++;
+    }
+    return filled;
+  }
+
+  async function digest(value) {
+    const bytes = await w.crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+    return [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function examIdentity(parsed, licenseKey = verifiedKey) {
+    if (!w.crypto?.subtle || !parsed.hints.length) return null;
+    const courseHash = await digest(JSON.stringify([w.location.origin, w.location.pathname, parsed.hints]));
+    const owner = await digest(licenseKey);
+    const context = { memberId: 'juming-bank', coursesId: `juming-${courseHash}`, sourcePlatform: 'juming', questionHints: parsed.hints };
+    const scope = await digest(JSON.stringify([owner, context.coursesId, context.questionHints]));
+    return { owner, scope, context };
+  }
+
+  function errorMessage(error) {
+    const messages = {
+      QUESTION_BANK_MISS: '题库暂未覆盖本场题目，本次未扣费。', INVALID_LICENSE: 'Token 无效，本次未扣费。',
+      LICENSE_DISABLED: 'Token 已停用，本次未扣费。', INSUFFICIENT_BALANCE: '余额不足，本次未扣费。',
+      NO_VALID_QUESTIONS: '没有取得可用答案，本次未扣费。', PAYLOAD_TOO_LARGE: '题目数据过大，本次未扣费。',
+      CLIENT_BUSY: '已有请求正在处理。', RATE_LIMITED: '请求过于频繁，请稍后再试。',
+      IDEMPOTENCY_KEY_EXPIRED: '原请求已超过恢复期限，没有新建收费请求。', RETRY_CONFIRM_REQUIRED: '需要确认后才能重试原请求。'
+    };
+    return messages[error?.message] || '请求结果无法确认，请只使用“原请求重试”。';
+  }
+
+  function safeLabel(value) {
+    return String(value || '').replace(/https?:\/\/\S+/gi, '[链接已隐藏]')
+      .replace(/(?:[0-9A-F]{4}-){9}[0-9A-F]{4}/gi, '[Token已隐藏]')
+      .replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, 80);
+  }
+
+  function diagnostic() {
+    const parsed = parseQuestions();
+    return {
+      version: jumingHelperView.version,
+      exportedAt: new Date().toISOString(),
+      platform: 'jumingedu',
+      runtime: { origin: w.location.origin, transport: transportName },
+      page: pageKind(w.location.href),
+      state: { enabled, waitingQr, examPaused, submitted, queryBusy, retryAttempts,
+        retryPending: !!pendingExamRetry || !!retryFillTask },
+      billing: { tokenBound: !!verifiedKey, remaining, hasCurrentRequest: !!currentJob, requestScopeBound: !!currentScope },
+      questions: { count: parsed.hints.length, types: parsed.hints.map(item => item.type), error: safeLabel(parsed.error) },
+      courses: readCourses().map(course => ({ index: course.index, title: safeLabel(course.title),
+        status: safeLabel(course.status), progress: course.progress, current: course.current })),
+      status: safeLabel(message)
+    };
+  }
+
+  function exportDiagnostic() {
+    let url = null, link = null;
+    try {
+      const blob = new Blob([JSON.stringify(diagnostic(), null, 2)], { type: 'application/json' });
+      url = w.URL.createObjectURL(blob); link = d.createElement('a');
+      link.href = url; link.download = `course-helper-juming-${Date.now()}.json`;
+      d.body.append(link); link.click(); link.remove();
+      const releaseURL = url; w.setTimeout(() => w.URL.revokeObjectURL(releaseURL), 10000);
+      say('已导出举名脱敏诊断日志。', 'success');
+      return true;
+    } catch (error) {
+      try { link?.remove(); if (url) w.URL.revokeObjectURL(url); } catch { /* Best-effort cleanup. */ }
+      console.warn('[课程助手] 举名诊断导出失败', safeLabel(error?.message));
+      say('诊断日志导出失败，请检查浏览器下载权限。', 'warning');
+      return false;
+    }
+  }
+
+  function onDiagnosticHotkey(event) {
+    if (!pageKind(w.location.href) || event.isTrusted !== true || event.repeat || d.visibilityState === 'hidden' ||
+        !event.ctrlKey || !event.altKey || event.shiftKey || event.metaKey ||
+        String(event.key).toLowerCase() !== 'l') return;
+    if (exportDiagnostic()) event.preventDefault();
+  }
+
+  function say(value, tone = 'normal') {
+    message = value;
+    messageTone = tone;
+    if (statusEl) {
+      statusEl.textContent = value;
+      statusEl.dataset.action = pageKind(w.location.href) === 'exam'
+        ? (examPaused ? '点击恢复考试自动化' : '点击暂停考试自动化')
+        : (enabled ? '点击暂停' : '点击启动');
+      statusEl.style.background = tone === 'warning' ? '#b26a16' : tone === 'success' ? '#238636' : '#1677ff';
+      if (examPaused || (!enabled && pageKind(w.location.href) === 'video')) statusEl.style.background = '#666';
+    }
+    const detail = billingPanel?.querySelector('[data-billing-detail]');
+    if (detail) detail.textContent = value;
+    const billingStatus = billingPanel?.querySelector('[data-billing-status]');
+    if (billingStatus) billingStatus.textContent = value;
+  }
+
+  function renderToken() {
+    if (!billingPanel) return;
+    const busy = queryBusy || tokenRefreshBusy || tokenRefreshPending;
+    billingPanel.querySelector('[data-license-state]').textContent = verifiedKey ? '正常' : '未授权';
+    billingPanel.querySelector('[data-license-remaining]').textContent = remaining ?? '—';
+    billingPanel.querySelector('[data-license-mask]').textContent = verifiedKey
+      ? `${verifiedKey.slice(0, 4)}-****-****-${verifiedKey.slice(-4)}` : '未设置';
+    billingPanel.querySelector('[data-license-note]').textContent = verifiedKey && remaining === 0 ? '授权次数不足，请充值。' : '';
+    const inline = billingPanel.querySelector('[data-license-inline]');
+    if (inline) {
+      inline.hidden = !!verifiedKey;
+      if (verifiedKey) inline.querySelector('input').value = '';
+    }
+    for (const control of billingPanel.querySelectorAll('button,input')) control.disabled = busy;
+    const retry = billingPanel.querySelector('[data-retry]');
+    if (retry) retry.disabled = busy || !verifiedKey || !client;
+    const balance = billingPanel.querySelector('[data-balance]');
+    if (balance) balance.disabled = busy || !verifiedKey || !client;
+    const change = panel?.querySelector('[data-dock-license-change]');
+    if (change) change.disabled = busy;
+  }
+
+  function bindingCurrent(key) {
+    if (verifiedKey !== key) return false;
+    const current = shared?.read();
+    return current === undefined || current?.licenseKey === key;
+  }
+
+  function resetExamForBindingChange() {
+    if (submitTimer !== null) { w.clearTimeout(submitTimer); submitTimer = null; }
+    pendingSubmitHints = null; pendingSubmitKey = ''; pendingExamRetry = null; retryFillTask = null; handledFailureDialog = null;
+    learnedSelections.clear(); retryScope = ''; retryAttempts = 0;
+    currentJob = null; currentScope = ''; submitted = false;
+    autoArmed = false; autoUsed = false; stableBatch = '';
+    if (pageKind(w.location.href) === 'exam') examPaused = true;
+  }
+
+  function syncSharedBinding() {
+    if (!shared) return true;
+    const binding = shared.read();
+    if (binding === undefined) return true;
+    const nextKey = binding?.licenseKey || '';
+    if (nextKey === verifiedKey) {
+      if (binding && remaining !== binding.remaining && !queryBusy && !tokenRefreshBusy) {
+        remaining = binding.remaining;
+        renderToken();
+      }
+      return true;
+    }
+    tokenGeneration++;
+    tokenRefreshPending = false;
+    verifiedKey = nextKey;
+    remaining = binding?.remaining ?? null;
+    resetExamForBindingChange();
+    renderToken();
+    say(binding ? '检测到共享 Token 已更新；考试自动化已暂停，请核对后点击恢复。' :
+      '共享 Token 已清除；考试自动化已暂停，请重新验证。', 'warning');
+    return false;
+  }
+
+  async function refreshBoundToken(key, announce = false) {
+    if (!client || !key || queryBusy || tokenRefreshBusy) { tokenRefreshPending = false; return false; }
+    const generation = ++tokenGeneration;
+    tokenRefreshPending = false;
+    tokenRefreshBusy = true;
+    renderToken();
+    if (announce) say('正在刷新 Token 余额…');
+    try {
+      const data = await client.balance(key);
+      if (!alive || generation !== tokenGeneration || !bindingCurrent(key)) return false;
+      remaining = data.remaining;
+      shared?.save(key, remaining, Date.now(), 'balance');
+      if (announce) say(`余额已刷新，剩余 ${remaining} 次。`, 'success');
+      return true;
+    } catch (error) {
+      if (generation !== tokenGeneration || !bindingCurrent(key)) return false;
+      if (['INVALID_LICENSE', 'LICENSE_DISABLED'].includes(error.message)) {
+        shared?.clear(key);
+        verifiedKey = ''; remaining = null;
+        resetExamForBindingChange();
+      }
+      say(tokenVerificationMessages(error.message), 'warning');
+      return false;
+    } finally {
+      tokenRefreshBusy = false;
+      renderToken();
+      if (alive) tick();
+    }
+  }
+
+  async function verifyToken(candidate) {
+    if (!client || queryBusy || tokenRefreshBusy || tokenRefreshPending) return;
+    const key = String(candidate || '').trim();
+    const feedback = tokenGuide?.querySelector('[data-license-feedback]');
+    if (!validLicenseFormat(key)) {
+      if (feedback) feedback.textContent = '请输入有效的题库 Token。';
+      else say('Token 格式不正确。', 'warning');
+      return;
+    }
+    const sharedKeyAtStart = shared?.read()?.licenseKey || '';
+    const generation = ++tokenGeneration;
+    queryBusy = true; renderToken(); say('正在验证 Token…');
+    if (feedback) feedback.textContent = '正在验证 Token…';
+    try {
+      const data = await client.balance(key);
+      if (!alive || generation !== tokenGeneration) return;
+      const sharedNow = shared?.read();
+      if (sharedNow?.licenseKey && sharedNow.licenseKey !== sharedKeyAtStart && sharedNow.licenseKey !== key) {
+        syncSharedBinding();
+        if (feedback) feedback.textContent = '其他页面已更换 Token；本次验证结果未覆盖当前绑定。';
+        return;
+      }
+      const changed = !!verifiedKey && verifiedKey !== key;
+      const wasPaused = examPaused;
+      if (changed) { resetExamForBindingChange(); examPaused = wasPaused; }
+      verifiedKey = key; remaining = data.remaining;
+      shared?.save(key, remaining, Date.now(), 'bind');
+      for (const input of [tokenGuide?.querySelector('[data-license-entry]'), billingPanel?.querySelector('[data-license-inline-entry]')]) {
+        if (input) input.value = '';
+      }
+      autoArmed = pageKind(w.location.href) === 'exam'; autoUsed = false; stableBatch = '';
+      if (tokenGuide?.open) tokenGuide.close();
+      say(`Token 已验证，剩余 ${remaining} 次；题目稳定后自动查题。`, 'success');
+    } catch (error) {
+      if (generation !== tokenGeneration) return;
+      if (['INVALID_LICENSE', 'LICENSE_DISABLED'].includes(error.message)) shared?.clear(key);
+      if (feedback) feedback.textContent = tokenVerificationMessages(error.message);
+      else say(tokenVerificationMessages(error.message), 'warning');
+    } finally { queryBusy = false; renderToken(); }
+  }
+
+  function allAnswered(parsed) {
+    return parsed.controls.length === parsed.hints.length && parsed.controls.every((inputs, index) =>
+      parsed.hints[index].type === '1' ? inputs.some(input => input.checked) : inputs.filter(input => input.checked).length === 1);
+  }
+
+  function scheduleSubmit(expectedHints, expectedKey = pendingSubmitKey || verifiedKey) {
+    if (examPaused || submitted || tokenGuide?.open || submitTimer !== null) return;
+    pendingSubmitKey = expectedKey;
+    submitTimer = w.setTimeout(() => {
+      submitTimer = null;
+      if (!alive || examPaused || submitted || tokenGuide?.open || pageKind(w.location.href) !== 'exam') return;
+      if (!bindingCurrent(expectedKey)) {
+        syncSharedBinding();
+        pendingSubmitHints = null; pendingSubmitKey = ''; examPaused = true;
+        say('Token 已变化，旧答案未提交；请核对后点击恢复。', 'warning');
+        return;
+      }
+      const current = parseQuestions();
+      if (JSON.stringify(current.hints) !== JSON.stringify(expectedHints) || !allAnswered(current)) {
+        say('答案未完整填入，已停止自动交卷，请手动核对。', 'warning');
+        return;
+      }
+      const button = d.querySelector('.submitBtn .btns');
+      if (!button || !click(button)) {
+        say('未找到可用的提交按钮，答案已保留，请手动提交。', 'warning');
+        return;
+      }
+      submitted = true;
+      pendingSubmitHints = null; pendingSubmitKey = '';
+      say('答案已完整填入并提交，等待平台返回考核结果。', 'success');
+    }, 500);
+  }
+
+  function visibleFailureDialog() {
+    return [...d.querySelectorAll('.el-dialog')].find(dialog => visibleInTree(dialog) &&
+      [...dialog.querySelectorAll('.el-dialog__header')].some(header => text(header).includes('考核未通过'))) || null;
+  }
+
+  function buildExamRetryPlan(dialog) {
+    const parsed = parseQuestions();
+    if (parsed.error || !parsed.hints.length || parsed.controls.length !== parsed.hints.length) {
+      return { error: parsed.error || '未读取到完整题目，已停止自动重答。' };
+    }
+    const fingerprint = JSON.stringify(parsed.hints);
+    const outcomes = new Map();
+    const resultBoxes = [...d.querySelectorAll('.sheetBox.success,.sheetBox.error')].filter(box =>
+      visibleInTree(box) && (!box.closest('.el-dialog') || box.closest('.el-dialog') === dialog));
+    for (const box of resultBoxes) {
+      const number = Number(text(box).match(/\d+/)?.[0]);
+      if (!Number.isInteger(number) || number < 1 || number > parsed.hints.length || outcomes.has(number - 1)) {
+        return { error: '考核结果题号无法可靠对应，已停止自动重答。' };
+      }
+      outcomes.set(number - 1, box.classList.contains('success') ? 'success' : 'error');
+    }
+    if (outcomes.size !== parsed.hints.length) return { error: '考核结果不完整，已停止自动重答。' };
+
+    const previous = retryScope === fingerprint ? learnedSelections : new Map();
+    const records = new Map(), targets = [];
+    for (const [index, question] of parsed.hints.entries()) {
+      const inputs = parsed.controls[index];
+      const selected = inputs.map((input, position) => input.checked ? position : -1).filter(position => position >= 0);
+      if (!selected.length) return { error: `第 ${index + 1} 题未保留已选答案，已停止自动重答。` };
+      const old = previous.get(index);
+      const record = { tried: new Set(old?.tried || []), correct: old?.correct ? [...old.correct] : null };
+      for (const position of selected) record.tried.add(position);
+      if (outcomes.get(index) === 'success') {
+        record.correct = [...selected];
+        targets.push([...selected]);
+      } else {
+        record.correct = null;
+        if (question.type === '1' || selected.length !== 1) {
+          return { error: `第 ${index + 1} 题为多选或结构异常，已停止自动重答。` };
+        }
+        const next = inputs.findIndex((_input, position) => !record.tried.has(position));
+        if (next < 0) return { error: `第 ${index + 1} 题没有未尝试选项，已停止自动重答。` };
+        targets.push([next]);
+      }
+      records.set(index, record);
+    }
+    return { fingerprint, records, targets };
+  }
+
+  async function applyExamRetryPlan(plan) {
+    const href = w.location.href, generation = tokenGeneration, licenseKey = verifiedKey;
+    const parsed = parseQuestions();
+    if (parsed.error || JSON.stringify(parsed.hints) !== plan.fingerprint) return false;
+    for (const [index, inputs] of parsed.controls.entries()) {
+      const wanted = new Set(plan.targets[index]);
+      if (parsed.hints[index].type === '1') {
+        for (const [position, input] of inputs.entries()) setChecked(input, wanted.has(position));
+      } else {
+        const target = inputs[plan.targets[index][0]];
+        if (!target) return false;
+        setChecked(target, true);
+      }
+    }
+    await new Promise(resolve => w.setTimeout(resolve, 100));
+    if (!alive || examPaused || pageKind(w.location.href) !== 'exam' || w.location.href !== href ||
+        tokenGeneration !== generation || verifiedKey !== licenseKey) return null;
+    const settled = parseQuestions();
+    if (settled.error || JSON.stringify(settled.hints) !== plan.fingerprint) return false;
+    for (const [index, inputs] of settled.controls.entries()) {
+      const wanted = new Set(plan.targets[index]);
+      if (!inputs.every((input, position) => input.isConnected && input.checked === wanted.has(position))) return false;
+    }
+    submitted = false;
+    pendingSubmitHints = settled.hints;
+    scheduleSubmit(settled.hints, currentJob?.licenseKey || verifiedKey);
+    return true;
+  }
+
+  function handleFailedExamResult() {
+    if (retryFillTask) return true;
+    if (pendingExamRetry) {
+      const dialogOpen = pendingExamRetry.dialog.isConnected && visibleFailureDialog() === pendingExamRetry.dialog;
+      if (dialogOpen) {
+        if (Date.now() - pendingExamRetry.at >= 5000) {
+          pendingExamRetry = null; examPaused = true;
+          say('“重新答题”弹窗未关闭，已停止自动重答，请手动处理。', 'warning');
+        }
+        return true;
+      }
+      handledFailureDialog = null;
+      if (!pendingExamRetry.closedAt) pendingExamRetry.closedAt = Date.now();
+      const parsed = parseQuestions();
+      const ready = !parsed.error && JSON.stringify(parsed.hints) === pendingExamRetry.plan.fingerprint &&
+        parsed.controls.flat().every(input => input.isConnected && !input.matches(':disabled'));
+      if (!ready) pendingExamRetry.readyAt = 0;
+      else if (!pendingExamRetry.readyAt) pendingExamRetry.readyAt = Date.now();
+      if (!ready || Date.now() - pendingExamRetry.readyAt < 1000) {
+        if (Date.now() - pendingExamRetry.closedAt >= 10000) {
+          pendingExamRetry = null; examPaused = true;
+          say('重答题目加载超时，已停止自动重答，请手动核对。', 'warning');
+        } else say('“重新答题”弹窗已关闭，正在等待题目重新加载…', 'warning');
+        return true;
+      }
+      const plan = pendingExamRetry.plan;
+      pendingExamRetry = null;
+      const task = {};
+      retryFillTask = task;
+      void applyExamRetryPlan(plan).then(applied => {
+        if (retryFillTask !== task || applied === null) return;
+        if (!applied) {
+          examPaused = true;
+          say('重答页面与原题不一致，已停止自动重答，请手动核对。', 'warning');
+        } else say(`正在进行第 ${retryAttempts} 次自动重答；复用本场结果，不新增题库请求。`, 'success');
+      }).catch(() => {
+        if (retryFillTask !== task) return;
+        examPaused = true;
+        say('重答答案未能稳定写入，已停止自动重答，请手动核对。', 'warning');
+      }).finally(() => {
+        if (retryFillTask !== task) return;
+        retryFillTask = null;
+        scheduleTick();
+      });
+      return true;
+    }
+
+    const dialog = visibleFailureDialog();
+    if (!dialog) { handledFailureDialog = null; return false; }
+    if (!submitted || examPaused || queryBusy || tokenGuide?.open || handledFailureDialog === dialog) return true;
+    handledFailureDialog = dialog;
+    const plan = buildExamRetryPlan(dialog);
+    if (plan.error) {
+      examPaused = true;
+      say(plan.error, 'warning');
+      return true;
+    }
+    if (retryScope !== plan.fingerprint) {
+      retryScope = plan.fingerprint;
+      retryAttempts = 0;
+      learnedSelections.clear();
+    }
+    if (retryAttempts >= MAX_EXAM_RETRY_ATTEMPTS) {
+      examPaused = true;
+      say(`自动重答已达到 ${MAX_EXAM_RETRY_ATTEMPTS} 次上限，请手动核对。`, 'warning');
+      return true;
+    }
+    const button = [...dialog.querySelectorAll('button,.el-button,[role="button"]')].find(candidate =>
+      text(candidate) === '重新答题' && usable(candidate));
+    if (!button || !click(button)) {
+      examPaused = true;
+      say('未找到可用的“重新答题”按钮，已停止自动重答。', 'warning');
+      return true;
+    }
+    learnedSelections.clear();
+    for (const [index, record] of plan.records) learnedSelections.set(index, record);
+    retryAttempts++;
+    pendingExamRetry = { dialog, plan, at: Date.now() };
+    say(`考核未通过，已读取对错结果并进入第 ${retryAttempts} 次重答。`, 'warning');
+    return true;
+  }
+
+  async function queryExam(retry = false, automatic = false) {
+    if (!client || queryBusy || tokenRefreshBusy || tokenRefreshPending || !verifiedKey ||
+        pageKind(w.location.href) !== 'exam' || !syncSharedBinding()) return;
+    if (automatic && examPaused) return;
+    const licenseKey = verifiedKey;
+    const parsed = parseQuestions();
+    if (!parsed.hints.length) { say(parsed.error || '尚未读取到题目。', 'warning'); return; }
+    autoUsed = true;
+    queryBusy = true; renderToken(); say(retry ? '正在核对原请求…' : '正在查询题库…');
+    let identity, job = null;
+    try {
+      identity = await examIdentity(parsed, licenseKey);
+      if (!identity) throw new Error('NO_VALID_QUESTIONS');
+      if (!bindingCurrent(licenseKey)) { syncSharedBinding(); return; }
+      const old = journal.find(identity.scope);
+      if (!retry && old && ['processing', 'uncertain', 'success'].includes(old.state)) {
+        say(old.state === 'success' ? '本场已有成功查询记录，为避免重复扣费，本页不会再次购买。' :
+          '本场存在未确认请求，请使用“原请求重试”。', 'warning');
+        if (old.state !== 'success' && Date.now() - old.at < 30000) {
+          currentJob = { requestId: old.requestId, licenseKey, context: identity.context, result: null, attempted: true };
+          currentScope = identity.scope;
+        }
+        return;
+      }
+      if (!retry) {
+        job = client.makeJob(identity.context, licenseKey);
+        currentJob = job;
+        currentScope = identity.scope;
+        journal.put({ scope: identity.scope, owner: identity.owner, requestId: job.requestId,
+          state: 'processing', title: '举名考核', count: parsed.hints.length, cost: null });
+      } else if (!currentJob || currentJob.licenseKey !== licenseKey || currentScope !== identity.scope) {
+        throw new Error('IDEMPOTENCY_KEY_EXPIRED');
+      } else job = currentJob;
+      const reused = retry && !!job.result;
+      const result = await client.query(job, retry);
+      journal.put({ scope: identity.scope, owner: identity.owner, requestId: job.requestId,
+        state: 'success', title: '举名考核', count: result.questionCount, cost: result.charged || result.originalCharged });
+      if (!bindingCurrent(licenseKey)) {
+        syncSharedBinding();
+        say('旧 Token 的查询结果已记录，但未填题、未提交，也未覆盖当前 Token。', 'warning');
+        return;
+      }
+      remaining = result.remaining;
+      shared?.save(licenseKey, remaining, Date.now(), 'balance');
+      const current = parseQuestions();
+      const fillable = JSON.stringify(current.hints) === JSON.stringify(parsed.hints);
+      const filled = fillable ? await fillExam(result, current) : 0;
+      const settled = parseQuestions();
+      const complete = fillable && JSON.stringify(settled.hints) === JSON.stringify(parsed.hints) &&
+        filled === result.questionCount && filled === settled.hints.length && allAnswered(settled);
+      say(`返回 ${result.questionCount} 题，填入 ${filled} 题，本次扣 ${reused ? 0 : result.charged} 次。` +
+        (complete ? ' 答案完整，准备自动提交。' : ' 答案不完整，已停止自动交卷。'), complete ? 'success' : 'warning');
+      if (complete) { pendingSubmitHints = settled.hints; pendingSubmitKey = licenseKey; scheduleSubmit(settled.hints, licenseKey); }
+    } catch (error) {
+      if (identity && job && !job.result) {
+        const certain = ['QUESTION_BANK_MISS', 'INVALID_LICENSE', 'LICENSE_DISABLED', 'INSUFFICIENT_BALANCE',
+          'NO_VALID_QUESTIONS', 'PAYLOAD_TOO_LARGE', 'RATE_LIMITED', 'IDEMPOTENCY_KEY_EXPIRED'].includes(error.message);
+        journal.put({ scope: identity.scope, owner: identity.owner, requestId: job.requestId,
+          state: certain ? 'failed' : 'uncertain', title: '举名考核', count: parsed.hints.length, cost: certain ? 0 : null });
+      }
+      if (!bindingCurrent(licenseKey)) {
+        syncSharedBinding();
+        say('旧 Token 的请求已结束，未影响当前 Token。', 'warning');
+        return;
+      }
+      if (['INVALID_LICENSE', 'LICENSE_DISABLED'].includes(error.message)) {
+        shared?.clear(licenseKey); tokenGeneration++; verifiedKey = ''; remaining = null;
+        resetExamForBindingChange();
+      }
+      say(errorMessage(error), 'warning');
+    } finally { queryBusy = false; renderToken(); }
+  }
+
+  function currentVideo() {
+    return [...d.querySelectorAll('video')].find(video => video.isConnected && !video.ended) || d.querySelector('video');
+  }
+
+  function backgroundTransitionActive() {
+    return d.visibilityState === 'hidden' ||
+      (backgroundTransitionAt > 0 && Date.now() - backgroundTransitionAt <= 3000);
+  }
+
+  function lifecyclePlaybackMatches(video = currentVideo()) {
+    const snapshot = lifecycleSnapshot;
+    return !!(alive && enabled && !pageAway && !frozen && backgroundTransitionActive() &&
+      pageKind(w.location.href) === 'video' && video?.isConnected && !video.ended &&
+      snapshot?.video === video && snapshot.href === w.location.href && snapshot.userIntentEpoch === userIntentEpoch);
+  }
+
+  function clearBackgroundResume() {
+    if (backgroundResumeTimer !== null) w.clearTimeout(backgroundResumeTimer);
+    backgroundResumeTimer = null;
+    if (backgroundResumePending) w.clearTimeout(backgroundResumePending.timeout);
+    backgroundResumePending = null;
+    backgroundRetryAt = 0;
+    backgroundRetryDelay = 1000;
+  }
+
+  function scheduleBackgroundResume(video, delay = 0) {
+    if (!lifecyclePlaybackMatches(video) || !video.paused || backgroundResumePending || backgroundResumeTimer !== null) return;
+    const wait = Math.max(delay, backgroundRetryAt - Date.now(), 0);
+    backgroundResumeTimer = w.setTimeout(() => {
+      backgroundResumeTimer = null;
+      attemptBackgroundResume(video);
+    }, wait);
+  }
+
+  function attemptBackgroundResume(video) {
+    if (!lifecyclePlaybackMatches(video) || !video.paused || backgroundResumePending) return;
+    if (Date.now() < backgroundRetryAt) { scheduleBackgroundResume(video); return; }
+    if (studyReminderRecovery || studyReminder()) {
+      scheduleTick();
+      scheduleBackgroundResume(video, 750);
+      return;
+    }
+    const attempt = { video, userIntentEpoch, href: w.location.href, timeout: null };
+    backgroundResumePending = attempt;
+    const valid = () => backgroundResumePending === attempt && lifecyclePlaybackMatches(video);
+    const finish = success => {
+      if (backgroundResumePending !== attempt) return;
+      w.clearTimeout(attempt.timeout);
+      backgroundResumePending = null;
+      if (!lifecyclePlaybackMatches(video)) return;
+      if (success && !video.paused) {
+        backgroundRetryAt = 0; backgroundRetryDelay = 1000;
+        syncBackgroundKeepalive();
+        say('举名课程正在后台静音播放。', 'success');
+        return;
+      }
+      const retryIn = backgroundRetryDelay;
+      backgroundRetryAt = Date.now() + retryIn;
+      backgroundRetryDelay = Math.min(15000, backgroundRetryDelay * 2);
+      syncBackgroundKeepalive();
+      say(`后台播放恢复未成功，助手将在 ${Math.ceil(retryIn / 1000)} 秒后重试。`, 'warning');
+      scheduleBackgroundResume(video);
+    };
+    const settle = success => {
+      const staleStop = !alive || !enabled || pageAway || frozen ||
+        w.location.href !== attempt.href || pageKind(w.location.href) !== 'video' || currentVideo() !== video;
+      if (backgroundResumePending !== attempt || !valid()) {
+        if (backgroundResumePending === attempt) {
+          w.clearTimeout(attempt.timeout);
+          backgroundResumePending = null;
+        }
+        if (staleStop && !video.paused && !video.ended) {
+          try { video.pause(); } catch { /* A stale play result must not override a later manual stop. */ }
+        }
+        return;
+      }
+      finish(success);
+    };
+    attempt.timeout = w.setTimeout(() => finish(false), 5000);
+    try {
+      video.muted = true; video.volume = 0;
+      Promise.resolve(video.play()).then(() => settle(valid() && !video.paused), () => settle(false));
+    } catch { finish(false); }
+  }
+
+  function backgroundPlaybackActive() {
+    const video = currentVideo();
+    return alive && enabled && !pageAway && !frozen && d.visibilityState === 'hidden' &&
+      pageKind(w.location.href) === 'video' && video?.isConnected && !video.ended &&
+      (!video.paused || lifecyclePlaybackMatches(video));
+  }
+
+  function stopLocalRtc() {
+    const rtc = localRtc;
+    localRtc = null;
+    if (!rtc) return;
+    w.clearTimeout(rtc.timeout);
+    for (const resource of [...rtc.channels, ...rtc.peers]) {
+      try { resource.close(); } catch { /* Already closed. */ }
+    }
+  }
+
+  function stopBackgroundKeepalive() {
+    const title = backgroundTitle;
+    backgroundTitle = null;
+    if (title) {
+      w.clearInterval(title.timer);
+      if (d.title === title.owned) d.title = title.base;
+    }
+    stopLocalRtc();
+    rtcRetryAt = rtcFailures = 0;
+  }
+
+  function startLocalRtc() {
+    if (localRtc || Date.now() < rtcRetryAt || typeof w.RTCPeerConnection !== 'function') return;
+    const rtc = { peers: [], channels: [], pending: [[], []], chains: [Promise.resolve(), Promise.resolve()],
+      started: Date.now(), disconnectedAt: null, opened: false, timeout: null };
+    localRtc = rtc;
+    const valid = () => localRtc === rtc && backgroundPlaybackActive();
+    const fail = () => {
+      if (localRtc !== rtc) return;
+      stopLocalRtc();
+      rtcFailures++;
+      rtcRetryAt = Date.now() + Math.min(30000, 2000 * 2 ** Math.min(4, rtcFailures - 1));
+    };
+    rtc.fail = fail;
+    function addCandidate(target, candidate) {
+      if (!candidate || !valid()) return;
+      const peer = rtc.peers[target];
+      if (!peer.remoteDescription) {
+        if (rtc.pending[target].length < 32) rtc.pending[target].push(candidate);
+        return;
+      }
+      rtc.chains[target] = rtc.chains[target].then(() => {
+        if (valid()) return peer.addIceCandidate(candidate);
+      }).catch(fail);
+    }
+    function checkOpen() {
+      if (!valid() || rtc.opened || rtc.channels.length !== 2 || rtc.channels.some(channel => channel.readyState !== 'open')) return;
+      if (Date.now() - rtc.started > 12000) { fail(); return; }
+      rtc.opened = true;
+      w.clearTimeout(rtc.timeout);
+      rtcRetryAt = rtcFailures = 0;
+    }
+    function bindChannel(channel) {
+      rtc.channels.push(channel);
+      channel.onopen = checkOpen;
+      channel.onerror = channel.onclose = fail;
+      checkOpen();
+    }
+    try {
+      // Same-tab peers only. No media, external ICE servers or application payloads.
+      const a = new w.RTCPeerConnection({ iceServers: [] });
+      rtc.peers.push(a);
+      const b = new w.RTCPeerConnection({ iceServers: [] });
+      rtc.peers.push(b);
+      a.onicecandidate = event => addCandidate(1, event.candidate);
+      b.onicecandidate = event => addCandidate(0, event.candidate);
+      b.ondatachannel = event => {
+        if (valid()) bindChannel(event.channel);
+        else event.channel.close();
+      };
+      bindChannel(a.createDataChannel('juming-local-playback'));
+      for (const peer of rtc.peers) peer.onconnectionstatechange = () => {
+        if (!valid()) return;
+        if (['failed', 'closed'].includes(peer.connectionState)) { fail(); return; }
+        rtc.disconnectedAt = rtc.peers.some(item => item.connectionState === 'disconnected') ?
+          (rtc.disconnectedAt ?? Date.now()) : null;
+      };
+      rtc.timeout = w.setTimeout(fail, 12000);
+      void (async () => {
+        const offer = await a.createOffer();
+        if (!valid()) return;
+        await a.setLocalDescription(offer);
+        if (!valid()) return;
+        await b.setRemoteDescription(a.localDescription);
+        if (!valid()) return;
+        for (const candidate of rtc.pending[1].splice(0)) addCandidate(1, candidate);
+        const answer = await b.createAnswer();
+        if (!valid()) return;
+        await b.setLocalDescription(answer);
+        if (!valid()) return;
+        await a.setRemoteDescription(b.localDescription);
+        if (!valid()) return;
+        for (const candidate of rtc.pending[0].splice(0)) addCandidate(0, candidate);
+      })().catch(fail);
+    } catch { fail(); }
+  }
+
+  function syncBackgroundKeepalive() {
+    if (!backgroundPlaybackActive()) { stopBackgroundKeepalive(); return; }
+    if (!backgroundTitle) {
+      const title = { base: d.title, owned: null, alternate: false, timer: null };
+      backgroundTitle = title;
+      title.timer = w.setInterval(() => {
+        if (backgroundTitle !== title) return;
+        if (!backgroundPlaybackActive()) { stopBackgroundKeepalive(); return; }
+        if (d.title !== (title.owned ?? title.base)) title.base = d.title;
+        title.owned = (title.alternate ? '后台播放' : '学习中') + (title.base ? ` · ${title.base}` : '');
+        title.alternate = !title.alternate;
+        d.title = title.owned;
+      }, 1300);
+    }
+    if (localRtc?.disconnectedAt != null && Date.now() - localRtc.disconnectedAt >= 10000) localRtc.fail();
+    startLocalRtc();
+  }
+
+  function clearUserActivity() {
+    if (userActivityTimer !== null) w.clearTimeout(userActivityTimer);
+    userActivityTimer = null;
+    for (const timerId of userActivityBurstTimers) w.clearTimeout(timerId);
+    userActivityBurstTimers.clear();
+  }
+
+  function scheduleUserActivity(delay = 5 * 60 * 1000 + Math.random() * 5 * 60 * 1000) {
+    if (userActivityTimer !== null || !alive || !enabled || pageAway || frozen || pageKind(w.location.href) !== 'video') return;
+    const href = w.location.href;
+    userActivityTimer = w.setTimeout(() => {
+      userActivityTimer = null;
+      if (!alive || !enabled || pageAway || frozen || href !== w.location.href || pageKind(w.location.href) !== 'video') return;
+      const rect = currentVideo()?.getBoundingClientRect();
+      const area = rect?.width > 0 && rect?.height > 0 ? rect : {
+        left: w.innerWidth * 0.2, top: w.innerHeight * 0.2,
+        width: w.innerWidth * 0.6, height: w.innerHeight * 0.6
+      };
+      for (let i = 0; i < 3; i++) {
+        const timerId = w.setTimeout(() => {
+          userActivityBurstTimers.delete(timerId);
+          if (!alive || !enabled || pageAway || frozen || href !== w.location.href || pageKind(w.location.href) !== 'video') return;
+          d.dispatchEvent(new w.MouseEvent('mousemove', {
+            view: w, bubbles: true, cancelable: true,
+            clientX: area.left + Math.random() * area.width,
+            clientY: area.top + Math.random() * area.height
+          }));
+        }, i * 200);
+        userActivityBurstTimers.add(timerId);
+      }
+      scheduleUserActivity();
+    }, delay);
+  }
+
+  function trySign() {
+    const button = [...d.querySelectorAll('button.el-button--primary')].find(candidate =>
+      text(candidate.querySelector('span')) === '点击签到' && usable(candidate));
+    if (!button || clickedSigns.has(button) || Date.now() - lastSignAt < 5000) return false;
+    if (!click(button)) return false;
+    clickedSigns.add(button); lastSignAt = Date.now();
+    say('已点击签到，等待平台确认。', 'success');
+    return true;
+  }
+
+  function studyReminder() {
+    const controls = 'button,a,input[type="button"],input[type="submit"],[role="button"],.el-button,[class*="btn"],[class*="Btn"],[onclick]';
+    const boxes = '.el-message-box,.el-dialog,.study_diaog,.study-dialog,.modal,.popup,.dialog,[role="dialog"],[role="alertdialog"]';
+    for (const button of d.querySelectorAll(controls)) {
+      const caption = normalize(button.matches('input') ? button.value : text(button));
+      if (caption !== '继续学习' || !usable(button) || panel?.contains(button) || tokenGuide?.contains(button) ||
+          button.closest('[inert],[aria-disabled="true"]')) continue;
+      let box = button.closest(boxes);
+      if (!box) {
+        for (let parent = button.parentElement; parent && parent !== d.body; parent = parent.parentElement) {
+          const message = normalize(text(parent));
+          if (message.length > 500) break;
+          if (message.includes('花会沿路盛开') && message.includes('歇一歇') && message.includes('我们继续')) {
+            box = parent; break;
+          }
+        }
+      }
+      if (!box || box === d.body || !usable(box) ||
+          box.querySelector('input:not([type="button"]):not([type="submit"]):not([type="hidden"]),textarea,select,[contenteditable="true"],iframe')) continue;
+      const message = normalize(text(box));
+      if (message.length > 500 || !message.includes('花会沿路盛开') || !message.includes('歇一歇') ||
+          !message.includes('我们继续') || /验证|扫码|人脸|登录|登陆|考试|答题|交卷|授权|支付|扣费|充值|协议|同意|签到|打卡|身份/.test(message)) continue;
+      return { button, box };
+    }
+    return null;
+  }
+
+  function handleStudyReminder() {
+    let reminder = studyReminder();
+    const pendingBox = studyReminderRecovery?.box;
+    if (pendingBox?.isConnected && usable(pendingBox)) reminder = studyReminderRecovery;
+    if (reminder) {
+      if (studyReminderRecovery?.button !== reminder.button) {
+        const recentPause = lastRunningPauseAt > 0 && Date.now() - lastRunningPauseAt <= 5000;
+        if (!enabled && !recentPause) return false;
+        studyReminderRecovery = { button: reminder.button, box: reminder.box, at: Date.now(), attempted: false };
+      }
+      if (!studyReminderRecovery.attempted) {
+        studyReminderRecovery.attempted = true;
+        click(studyReminderRecovery.button);
+      }
+      const box = studyReminderRecovery.box;
+      if (box.isConnected && usable(box)) {
+        if (Date.now() - studyReminderRecovery.at >= 5000) {
+          studyReminderRecovery = null; lastRunningPauseAt = 0;
+          enabled = false; waitingQr = false; save();
+          say('平台休息提醒未能关闭，请手动点击“继续学习”。', 'warning');
+        } else say('正在确认平台休息提醒，关闭后继续播放…', 'warning');
+        return true;
+      }
+    }
+    if (studyReminderRecovery) {
+      studyReminderRecovery = null; lastRunningPauseAt = 0;
+      enabled = true; waitingQr = false; save();
+      say('已确认平台休息提醒，正在继续播放。', 'success');
+    }
+    return false;
+  }
+
+  function startAssess() {
+    if (!readCourses().some(course => course.current && course.status === '待考核')) return false;
+    const button = [...d.querySelectorAll('[class*="Assess"],button,[role="button"],a')].find(candidate =>
+      text(candidate) === '开始考核' && usable(candidate));
+    if (!button || clickedAssess.has(button) || !click(button)) return false;
+    clickedAssess.add(button); waitingQr = true; save();
+    say('已进入考核，等待手机扫码；扫码完成后页面会继续。', 'warning');
+    return true;
+  }
+
+  function advanceCourse() {
+    if (Date.now() - navigationAt < 3000) return false;
+    const courses = readCourses();
+    const next = courses.find(course => !course.current && course.progress !== null && course.progress < 100) ||
+      courses.find(course => !course.current && course.status === '待考核');
+    if (!next || !click(next.element)) return false;
+    navigationAt = Date.now();
+    say(next.status === '待考核' ? `正在进入考核：${next.title}` : `正在进入未完成课程：${next.title}`);
+    return true;
+  }
+
+  function tickVideo() {
+    if (handleStudyReminder()) return;
+    const observedVideo = currentVideo();
+    if (lifecyclePlaybackMatches(observedVideo) && observedVideo.paused) {
+      scheduleBackgroundResume(observedVideo);
+      return;
+    }
+    if (!enabled && observedVideo && !observedVideo.paused && !observedVideo.ended) {
+      enabled = true; waitingQr = false; save();
+    }
+    if (!enabled) return;
+    trySign();
+    if (waitingQr) return;
+    if (startAssess()) return;
+    const video = currentVideo();
+    if (!video || video.ended) { advanceCourse(); return; }
+    try { video.muted = true; video.volume = 0; } catch { /* Some players expose a read-only volume. */ }
+    if (video.paused) {
+      const rejected = () => {
+        if (!alive || video !== currentVideo() || !video.paused || video.ended) return;
+        lifecycleSnapshot = null;
+        enabled = false; waitingQr = false; save();
+        clearBackgroundResume(); clearUserActivity(); stopBackgroundKeepalive();
+        say('播放器拒绝自动播放，助手已同步暂停；请手动点击视频播放。', 'warning');
+      };
+      try { Promise.resolve(video.play()).catch(rejected); } catch { rejected(); }
+    } else say('举名课程正在静音播放；完成后自动进入下一项。', 'success');
+  }
+
+  function rememberLifecycleVideo() {
+    const video = currentVideo();
+    if (enabled && video?.isConnected && !video.paused && !video.ended) {
+      lifecycleSnapshot = { video, href: w.location.href, userIntentEpoch };
+    }
+  }
+
+  function recoverLifecycleVideo() {
+    if (!alive || pageAway || frozen || d.visibilityState !== 'visible') return;
+    backgroundTransitionAt = 0;
+    clearBackgroundResume();
+    const snapshot = lifecycleSnapshot;
+    lifecycleSnapshot = null;
+    if (snapshot && snapshot.userIntentEpoch === userIntentEpoch && snapshot.href === w.location.href &&
+        pageKind(w.location.href) === 'video' && snapshot.video === currentVideo() &&
+        snapshot.video.isConnected && !snapshot.video.ended) {
+      enabled = true; waitingQr = false; save();
+    }
+    tick();
+  }
+
+  function onTrustedVideoIntent(event) {
+    if (event.isTrusted !== true || pageKind(w.location.href) !== 'video' ||
+        panel?.contains(event.target) || tokenGuide?.contains(event.target)) return;
+    if (event.type === 'keydown' && ![' ', 'k', 'MediaPlayPause', 'MediaStop'].includes(event.key)) return;
+    userIntentEpoch++;
+    backgroundTransitionAt = 0;
+    clearBackgroundResume();
+    lifecycleSnapshot = null;
+  }
+
+  function onBackgroundBlur(event) {
+    if (event.isTrusted !== true || event.target !== w || !alive || !enabled || pageKind(w.location.href) !== 'video') return;
+    backgroundTransitionAt = Date.now();
+    rememberLifecycleVideo();
+  }
+
+  function onVisibilityChange() {
+    if (d.visibilityState === 'hidden') {
+      backgroundTransitionAt = Date.now();
+      rememberLifecycleVideo();
+      syncBackgroundKeepalive();
+    } else {
+      backgroundTransitionAt = 0;
+      clearBackgroundResume();
+      stopBackgroundKeepalive();
+      syncSharedBinding();
+      recoverLifecycleVideo();
+    }
+  }
+
+  function onFreeze() {
+    backgroundTransitionAt = Date.now();
+    frozen = true;
+    if (pageKind(w.location.href) === 'video') rememberLifecycleVideo();
+    clearBackgroundResume(); clearUserActivity(); stopBackgroundKeepalive();
+  }
+
+  function onResume() {
+    frozen = false;
+    syncSharedBinding();
+    scheduleUserActivity();
+    recoverLifecycleVideo();
+    if (d.visibilityState !== 'visible') tick();
+  }
+
+  function onPageHide() {
+    backgroundTransitionAt = Date.now();
+    rememberLifecycleVideo();
+    pageAway = true;
+    clearBackgroundResume(); clearUserActivity(); stopBackgroundKeepalive();
+  }
+
+  function onPageShow() {
+    pageAway = false; frozen = false;
+    if (d.visibilityState === 'visible') backgroundTransitionAt = 0;
+    syncSharedBinding();
+    scheduleUserActivity();
+    recoverLifecycleVideo();
+    if (d.visibilityState !== 'visible') tick();
+  }
+
+  function onFocusOrOnline() {
+    if (d.visibilityState === 'visible') backgroundTransitionAt = 0;
+    syncSharedBinding();
+    recoverLifecycleVideo();
+    if (d.visibilityState !== 'visible') tick();
+  }
+
+  function restoreDialogState() {
+    if (panel) panel.hidden = false;
+    if (scrollState) {
+      for (const [node, properties] of scrollState.styles) for (const [name, value, priority] of properties) {
+        if (value) node.style.setProperty(name, value, priority); else node.style.removeProperty(name);
+      }
+      w.scrollTo(scrollState.x, scrollState.y); scrollState = null;
+    }
+    if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
+    returnFocus = null;
+  }
+
+  function openGuide() {
+    if (!tokenGuide || tokenGuide.open || queryBusy) return;
+    tokenGuide.querySelector('[data-license-feedback]').textContent = '';
+    returnFocus = d.activeElement;
+    scrollState = { x: w.scrollX, y: w.scrollY, styles: [d.documentElement, d.body].map(node => [node,
+      ['overflow-x', 'overflow-y'].map(name => [name, node.style.getPropertyValue(name), node.style.getPropertyPriority(name)])]) };
+    for (const [node] of scrollState.styles) node.style.setProperty('overflow', 'hidden', 'important');
+    panel.hidden = true; tokenGuide.showModal();
+    tokenGuide.querySelector('[data-license-entry]').focus({ preventScroll: true });
+  }
+
+  function mountBilling(isExam) {
+    billingPanel = d.createElement('div'); billingPanel.className = 'helper-billing';
+    billingPanel.innerHTML = jumingHelperView.billingMarkup;
+    const inline = d.createElement('form'); inline.setAttribute('data-license-inline', '');
+    inline.innerHTML = jumingHelperView.inlineMarkup;
+    billingPanel.querySelector('[data-license-note]').after(inline);
+    billingPanel.querySelector('[data-exam-retry]').hidden = !isExam;
+    billingPanel.querySelector('[data-retry]').textContent = '查询 / 原请求重试';
+    billingPanel.querySelector('[data-new]').hidden = true;
+    const receiptButton = billingPanel.querySelector('[data-receipt-refresh]');
+    receiptButton.parentElement.hidden = true;
+    billingPanel.querySelector('[data-receipt-note]').hidden = true;
+    billingPanel.querySelector('[data-receipt-list]').hidden = true;
+    billingPanel.querySelector('[data-billing-status]').textContent = '等待题目加载。';
+    panel.querySelector('.helper-billing-slot').append(billingPanel);
+
+    tokenGuide = d.createElement('dialog'); tokenGuide.id = 'course-helper-license-guide';
+    tokenGuide.classList.add('notranslate'); tokenGuide.setAttribute('translate', 'no'); tokenGuide.setAttribute('aria-label', 'Token');
+    tokenGuide.innerHTML = jumingHelperView.guideMarkup; d.body.append(tokenGuide);
+    for (const event of ['click', 'change', 'input', 'keydown']) tokenGuide.addEventListener(event, e => e.stopPropagation());
+    for (const form of [tokenGuide.querySelector('form'), inline]) {
+      form.onsubmit = event => {
+        event.preventDefault();
+        if (event.isTrusted) void verifyToken(form.querySelector('input').value.trim() || verifiedKey);
+      };
+    }
+    tokenGuide.querySelector('[data-license-close]').onclick = () => { if (!queryBusy) tokenGuide.close(); };
+    tokenGuide.querySelector('[data-license-later]').onclick = () => { if (!queryBusy) tokenGuide.close(); };
+    tokenGuide.addEventListener('cancel', event => { event.preventDefault(); if (!queryBusy) tokenGuide.close(); });
+    tokenGuide.addEventListener('close', restoreDialogState);
+    panel.querySelector('[data-dock-license-change]').onclick = openGuide;
+    billingPanel.querySelector('[data-balance]').onclick = event => {
+      if (event.isTrusted && syncSharedBinding()) void refreshBoundToken(verifiedKey, true);
+    };
+    billingPanel.querySelector('[data-retry]').onclick = event => {
+      if (event.isTrusted && syncSharedBinding()) void queryExam(!!currentJob, false);
+    };
+    billingPanel.querySelector('[data-export-diagnostic]').onclick = event => {
+      if (event.isTrusted) exportDiagnostic();
+    };
+    autoArmed = !!verifiedKey; autoUsed = false; stableBatch = ''; submitted = false;
+    pendingSubmitHints = null; pendingSubmitKey = '';
+    renderToken();
+    if (!verifiedKey) w.setTimeout(() => alive && pageKind(w.location.href) && openGuide(), 0);
+  }
+
+  function renderPanel() {
+    if (tokenGuide?.open) tokenGuide.close();
+    tokenGuide?.remove(); tokenGuide = null; billingPanel = null; statusEl = null;
+    panel?.remove(); panel = null;
+    const kind = pageKind(w.location.href);
+    if (!kind) return;
+    panel = d.createElement('section'); panel.id = 'course-helper-dock';
+    panel.setAttribute('translate', 'no'); panel.className = 'notranslate';
+    panel.innerHTML = jumingHelperView.dockMarkup;
+    const style = d.createElement('style'); style.textContent = jumingHelperView.dockStyle; panel.prepend(style);
+    panel.querySelector('.helper-title').textContent = '举名学习助手 · 本地测试';
+    d.body.append(panel);
+    const body = panel.querySelector('.helper-body');
+    const toggle = panel.querySelector('[data-dock-toggle]');
+    toggle.onclick = () => {
+      body.hidden = !body.hidden; toggle.textContent = body.hidden ? '展开' : '收起';
+      toggle.setAttribute('aria-expanded', String(!body.hidden)); panel.toggleAttribute('data-collapsed', body.hidden);
+      if (!body.hidden) toggle.removeAttribute('data-notice');
+    };
+    statusEl = d.createElement('button'); statusEl.type = 'button'; statusEl.className = 'helper-status';
+    Object.assign(statusEl.style, kind === 'exam' ? jumingHelperView.examStatusStyle : jumingHelperView.courseStatusStyle);
+    panel.querySelector('.helper-status-slot').append(statusEl);
+    statusEl.onclick = () => {
+      if (kind === 'exam') {
+        examPaused = !examPaused;
+        if (!examPaused) {
+          if (pendingSubmitHints) scheduleSubmit(pendingSubmitHints, pendingSubmitKey || verifiedKey);
+          else if (!autoUsed) { autoArmed = !!verifiedKey; stableBatch = ''; }
+        }
+        say(examPaused ? '考试自动化已暂停，已保留当前答案。' : '考试自动化已恢复。', examPaused ? 'normal' : 'success');
+      } else {
+        const video = currentVideo();
+        userIntentEpoch++; lifecycleSnapshot = null; backgroundTransitionAt = 0; clearBackgroundResume();
+        studyReminderRecovery = null; lastRunningPauseAt = 0;
+        enabled = !enabled; waitingQr = false; save();
+        if (!enabled) {
+          try { if (video && !video.paused && !video.ended) video.pause(); } catch { /* Keep the helper stopped. */ }
+          clearUserActivity(); stopBackgroundKeepalive();
+        } else {
+          scheduleUserActivity();
+        }
+        say(enabled ? '已启动，正在检查视频、签到和课程状态。' : '已暂停。点击启动。', enabled ? 'success' : 'normal');
+      }
+      tick();
+    };
+    mountBilling(kind === 'exam');
+    say(message || (kind === 'exam' ? '已识别举名考试页，题目稳定后自动查题并提交。' :
+      (enabled ? '已恢复举名自动流程。' : '点击启动后开始静音播放、签到和顺序学习。')), messageTone);
+  }
+
+  function tick() {
+    if (!alive || !d.body) return;
+    const bindingUnchanged = syncSharedBinding();
+    if (pageAway || frozen) return;
+    const kind = pageKind(w.location.href);
+    if (kind !== currentKind) {
+      if (currentKind === 'video') {
+        lifecycleSnapshot = null;
+        backgroundTransitionAt = 0;
+        clearBackgroundResume(); clearUserActivity(); stopBackgroundKeepalive();
+      }
+      currentKind = kind; waitingQr = false; studyReminderRecovery = null; lastRunningPauseAt = 0;
+      pendingExamRetry = null; retryFillTask = null; handledFailureDialog = null;
+      retryScope = ''; retryAttempts = 0; learnedSelections.clear();
+      save(); renderPanel();
+    }
+    if (kind === 'video') {
+      tickVideo();
+      syncBackgroundKeepalive();
+      if (enabled) scheduleUserActivity(); else clearUserActivity();
+    } else if (kind === 'exam' && bindingUnchanged && !queryBusy) {
+      if (handleFailedExamResult()) return;
+      const parsed = parseQuestions();
+      if (parsed.error) say(parsed.error, 'warning');
+      else if (parsed.hints.length) {
+        const fingerprint = JSON.stringify(parsed.hints);
+        if (fingerprint !== stableBatch) { stableBatch = fingerprint; stableSince = Date.now(); }
+        else if (autoArmed && !autoUsed && !examPaused && !tokenGuide?.open && Date.now() - stableSince >= 600) {
+          void queryExam(false, true);
+        }
+      }
+    }
+  }
+
+  function scheduleTick() {
+    if (scheduled !== null) return;
+    scheduled = w.setTimeout(() => { scheduled = null; tick(); }, 150);
+  }
+
+  function onEnded(event) {
+    if (enabled && event.target instanceof w.HTMLMediaElement) {
+      lifecycleSnapshot = null;
+      clearBackgroundResume(); clearUserActivity(); stopBackgroundKeepalive();
+      say('当前视频已结束，等待课程状态更新。'); scheduleTick();
+    }
+  }
+
+  function onVideoState(event) {
+    const video = event.target;
+    if (!alive || pageKind(w.location.href) !== 'video' || !(video instanceof w.HTMLMediaElement) ||
+        video !== currentVideo() || video.ended) return;
+    const playing = event.type === 'play';
+    if ((playing && video.paused) || (!playing && !video.paused)) return;
+    if (!playing && enabled && (backgroundTransitionActive() || frozen || pageAway)) {
+      if (lifecycleSnapshot?.video !== video || lifecycleSnapshot.href !== w.location.href ||
+          lifecycleSnapshot.userIntentEpoch !== userIntentEpoch) {
+        lifecycleSnapshot = { video, href: w.location.href, userIntentEpoch };
+      }
+      lastRunningPauseAt = Date.now();
+      if (!frozen && !pageAway) {
+        syncBackgroundKeepalive();
+        scheduleBackgroundResume(video, 300);
+        scheduleTick();
+        say('检测到后台暂停，助手正在恢复播放。', 'warning');
+      } else say('页面生命周期已暂停；恢复运行后将继续播放。', 'warning');
+      return;
+    }
+    if (playing) {
+      lastRunningPauseAt = 0;
+      enabled = true; waitingQr = false; save();
+      if (backgroundTransitionActive() && !frozen && !pageAway) {
+        lifecycleSnapshot = { video, href: w.location.href, userIntentEpoch };
+        backgroundRetryAt = 0; backgroundRetryDelay = 1000;
+        say('举名课程正在后台静音播放。', 'success');
+      } else {
+        lifecycleSnapshot = null;
+        clearBackgroundResume();
+        say('举名课程正在静音播放；完成后自动进入下一项。', 'success');
+      }
+      scheduleUserActivity(); syncBackgroundKeepalive(); scheduleTick();
+      return;
+    }
+    lifecycleSnapshot = null; backgroundTransitionAt = 0;
+    if (enabled) lastRunningPauseAt = Date.now();
+    enabled = false; waitingQr = false; save();
+    clearBackgroundResume(); clearUserActivity(); stopBackgroundKeepalive();
+    say('视频已暂停，助手已同步暂停。');
+  }
+
+  function boot() {
+    if (!alive || !d.body) return;
+    currentKind = '';
+    observer = new w.MutationObserver(records => {
+      if (records.every(record => panel?.contains(record.target))) return;
+      scheduleTick();
+    });
+    observer.observe(d.body, { subtree: true, childList: true, attributes: true,
+      attributeFilter: ['class', 'style', 'hidden', 'disabled', 'aria-disabled', 'checked'] });
+    d.addEventListener('play', onVideoState, true);
+    d.addEventListener('pause', onVideoState, true);
+    d.addEventListener('ended', onEnded, true);
+    d.addEventListener('keydown', onDiagnosticHotkey, true);
+    d.addEventListener('pointerdown', onTrustedVideoIntent, true);
+    d.addEventListener('keydown', onTrustedVideoIntent, true);
+    d.addEventListener('freeze', onFreeze);
+    d.addEventListener('resume', onResume);
+    w.addEventListener('pagehide', onPageHide);
+    w.addEventListener('pageshow', onPageShow);
+    w.addEventListener('focus', onFocusOrOnline);
+    w.addEventListener('online', onFocusOrOnline);
+    timer = w.setInterval(tick, 1000);
+    tick();
+    if (tokenRefreshPending && verifiedKey) void refreshBoundToken(verifiedKey);
+  }
+
+  function destroy() {
+    alive = false;
+    studyReminderRecovery = null; lastRunningPauseAt = 0;
+    lifecycleSnapshot = null; pageAway = true; frozen = false;
+    pendingExamRetry = null; retryFillTask = null; handledFailureDialog = null; learnedSelections.clear();
+    if (timer !== null) w.clearInterval(timer);
+    if (scheduled !== null) w.clearTimeout(scheduled);
+    if (submitTimer !== null) w.clearTimeout(submitTimer);
+    clearBackgroundResume(); clearUserActivity(); stopBackgroundKeepalive();
+    observer?.disconnect();
+    d.removeEventListener('play', onVideoState, true);
+    d.removeEventListener('pause', onVideoState, true);
+    d.removeEventListener('ended', onEnded, true);
+    d.removeEventListener('keydown', onDiagnosticHotkey, true);
+    d.removeEventListener('pointerdown', onTrustedVideoIntent, true);
+    d.removeEventListener('keydown', onTrustedVideoIntent, true);
+    d.removeEventListener('visibilitychange', onVisibilityChange, true);
+    w.removeEventListener('blur', onBackgroundBlur, true);
+    d.removeEventListener('freeze', onFreeze);
+    d.removeEventListener('resume', onResume);
+    w.removeEventListener('pagehide', onPageHide);
+    w.removeEventListener('pageshow', onPageShow);
+    w.removeEventListener('focus', onFocusOrOnline);
+    w.removeEventListener('online', onFocusOrOnline);
+    d.removeEventListener('DOMContentLoaded', boot);
+    if (tokenGuide?.open) tokenGuide.close();
+    tokenGuide?.remove(); restoreDialogState();
+    panel?.remove();
+    if (w.__courseHelperJuming === api) delete w.__courseHelperJuming;
+  }
+
+  const api = {
+    destroy,
+    snapshot: () => {
+      const parsed = parseQuestions();
+      return { platform: 'jumingedu', page: pageKind(w.location.href), enabled, waitingQr, examPaused, submitted,
+        retryAttempts, retryPending: !!pendingExamRetry || !!retryFillTask,
+        courses: readCourses().map(({ element, ...course }) => course), questionHints: parsed.hints, questionError: parsed.error };
+    },
+    parseQuestions: () => {
+      const parsed = parseQuestions();
+      return { hints: parsed.hints, error: parsed.error };
+    },
+    readCourses: () => readCourses().map(({ element, ...course }) => course), diagnostic,
+    pageKind
+  };
+  w.__courseHelperJuming = api;
+  d.addEventListener('visibilitychange', onVisibilityChange, true);
+  w.addEventListener('blur', onBackgroundBlur, true);
+  if (d.body) boot(); else d.addEventListener('DOMContentLoaded', boot, { once: true });
+  return api;
+}
+const privilegedBillingFetch = typeof GM_xmlhttpRequest === 'function'
+  ? createUserscriptBillingFetch(GM_xmlhttpRequest) : null;
+// JUMING ADAPTER END
+
   const VIDEO_MARK = 'data-course-helper-ready';
   const API_PATH = '/xxpt/api/exam/getCoursesExamList';
-  const SCRIPT_VERSION = '5.5.56.1073';
+  const SCRIPT_VERSION = '5.5.56.1079';
   // BILLING CORE START — independent of DOM; transport and billing contract unchanged.
   function createBillingClient(fetcher, uuid, now = Date.now) {
     let busy = false;
@@ -2315,9 +3788,16 @@ function watchHuayiExamSubmission(w, isPaused) {
     }
   }
   const queryJournal = new QueryJournal(() => window.sessionStorage);
+  // JUMING DISPATCH START
+  if (/(^|\.)jumingedu\.com$/i.test(window.location.hostname)) {
+    startJumingAdapter(window, parseExamQuestionHints, createBillingClient, QueryJournal, validLicenseFormat,
+      tokenBalanceTransport, tokenVerificationMessages, privilegedBillingFetch);
+    return;
+  }
+  // JUMING DISPATCH END
   // HUAYI DISPATCH START
   if (/(^|\.)91huayi\.com$/i.test(window.location.hostname)) {
-    startHuayiAdapter(window, parseExamQuestionHints, createBillingClient, QueryJournal, validLicenseFormat);
+    startHuayiAdapter(window, parseExamQuestionHints, createBillingClient, QueryJournal, validLicenseFormat, privilegedBillingFetch);
     return;
   }
   // HUAYI DISPATCH END
@@ -2611,7 +4091,7 @@ function watchHuayiExamSubmission(w, isPaused) {
     };
   }
   function getBillingClient() {
-    if (!billingClient) billingClient = createBillingClient(tokenBalanceTransport((...args) => nativeFetch.call(window, ...args)), () => crypto.randomUUID());
+    if (!billingClient) billingClient = createBillingClient(tokenBalanceTransport(privilegedBillingFetch || ((...args) => nativeFetch.call(window, ...args))), () => crypto.randomUUID());
     return billingClient;
   }
   const licenseManager = new LicenseManager(licenseState, {
@@ -3174,6 +4654,7 @@ function watchHuayiExamSubmission(w, isPaused) {
   let examStartConfirmedButtons = new WeakSet();
   const examStartDialogStates = new WeakMap();
   let examSubmitConfirmedButtons = new WeakSet();
+  let examAnswerReviewConfirmedButtons = new WeakSet();
   const examInputAttempts = new WeakMap();
   const examXHRObserved = new WeakSet();
   let lastAdvanceAt = 0;
@@ -3286,6 +4767,7 @@ function watchHuayiExamSubmission(w, isPaused) {
     lastPage = ''; lastAdvanceAt = 0;
     questions = []; answeredPages.clear();
     examStartConfirmedButtons = new WeakSet(); examSubmitConfirmedButtons = new WeakSet();
+    examAnswerReviewConfirmedButtons = new WeakSet();
     activeExamRoute = ''; examSessionId++;
     examFlowQueued = false; examFlowLastState = '';
     billingCandidate = billingPrefetch = billingJob = null;
@@ -4920,6 +6402,7 @@ function watchHuayiExamSubmission(w, isPaused) {
     answeredPages.clear();
     examStartConfirmedButtons = new WeakSet();
     examSubmitConfirmedButtons = new WeakSet();
+    examAnswerReviewConfirmedButtons = new WeakSet();
     examFlowLastState = '';
     if (route) {
       wasExamPage = true;
@@ -4960,6 +6443,7 @@ function watchHuayiExamSubmission(w, isPaused) {
     answeredPages.clear();
     examStartConfirmedButtons = new WeakSet();
     examSubmitConfirmedButtons = new WeakSet();
+    examAnswerReviewConfirmedButtons = new WeakSet();
     examFlowLastState = '';
     lastAdvanceAt = 0;
     wasExamPage = true;
@@ -5720,6 +7204,7 @@ function watchHuayiExamSubmission(w, isPaused) {
     clearExamConfirmTimer();
     examStartConfirmedButtons = new WeakSet();
     examSubmitConfirmedButtons = new WeakSet();
+    examAnswerReviewConfirmedButtons = new WeakSet();
     examFlowLastState = '';
     lastAdvanceAt = 0;
     courseVideoLoad = null;
@@ -7495,11 +8980,37 @@ function watchHuayiExamSubmission(w, isPaused) {
       )
     ];
 
+    // HENAN ANSWER REVIEW START
+    const answerReviewDialog = dialogs.find(dialog => {
+      const dialogText = textOf(dialog);
+      return dialog.isConnected && dialog.getClientRects().length > 0 &&
+        dialogText.includes('请您认真检查并核对') &&
+        dialogText.includes('参考答案') &&
+        dialogText.includes('继续交卷');
+    });
+    if (answerReviewDialog) {
+      const continueButton = [...answerReviewDialog.querySelectorAll(
+        'button, .el-button, [role="button"]'
+      )].find(button => textOf(button) === '继续交卷' &&
+        !button.disabled && button.getAttribute('aria-disabled') !== 'true' &&
+        !button.classList.contains('is-disabled') && !button.classList.contains('disabled'));
+      if (!continueButton || examAnswerReviewConfirmedButtons.has(continueButton)) return true;
+      examAnswerReviewConfirmedButtons.add(continueButton);
+      try { continueButton.click(); }
+      catch (error) { examAnswerReviewConfirmedButtons.delete(continueButton); throw error; }
+      examFlowDiagnostic.submitConfirms++;
+      recordPlaybackDiagnostic('已确认答案核对并继续交卷', null);
+      showExamStatus('检测到答案核对提示\n已自动继续交卷', '#722ed1');
+      requestExamFlow('继续交卷确认后的复查');
+      return true;
+    }
+    // HENAN ANSWER REVIEW END
+
     const submitDialog = dialogs.find(dialog => {
       const text = textOf(dialog);
       return (
         dialog.isConnected && dialog.getClientRects().length > 0 && (text.includes('请确认是否交卷') ||
-        (text.includes('温馨提示') && text.includes('交卷'))
+        (text.includes('温馨提示') && /(?:是否|确认|确定)(?:要|继续)?交卷/.test(text))
       ));
     });
 
